@@ -1,0 +1,1804 @@
+import { useState, useEffect, useMemo } from "react";
+import {
+  Flame, Star, Trophy, CheckCircle2, Lock, ArrowRight, ArrowLeft,
+  BookOpen, LayoutGrid, User, Library, Sparkles, Target, ChevronRight,
+  X, Check, Copy, FileText, Search, Loader2,
+  Save, Send, Info,
+} from "lucide-react";
+
+/* ============================================================
+   ДИЗАЙН-ТОКЕНЫ — сохранены без изменений от предыдущей версии
+   ============================================================ */
+
+const FONTS = `
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+`;
+
+const T = {
+  bg: "#EEF1F6", surface: "#FFFFFF", surfaceSoft: "#F5F7FB",
+  ink: "#161A2E", inkSoft: "#565C78", inkFaint: "#8A90AC", border: "#DFE3ED",
+  gold: "#E7A33E", goldSoft: "#FBEBD1",
+  teal: "#2F7A63", tealSoft: "#DCEFE7",
+  berry: "#B23A56", berrySoft: "#F6DEE3",
+  indigo: "#3B4A9E", indigoSoft: "#E4E7F7",
+};
+const displayFont = "'Fraunces', serif";
+const bodyFont = "'Inter', sans-serif";
+const monoFont = "'IBM Plex Mono', monospace";
+
+const primaryBtn = {
+  display: "inline-flex", alignItems: "center", gap: 8, marginTop: 24,
+  padding: "13px 22px", borderRadius: 12, border: "none", cursor: "pointer",
+  background: T.ink, color: T.surface, fontFamily: bodyFont, fontSize: 14, fontWeight: 600,
+};
+const secondaryBtn = {
+  display: "inline-flex", alignItems: "center", gap: 8,
+  padding: "13px 22px", borderRadius: 12, border: `1.5px solid ${T.border}`, cursor: "pointer",
+  background: "transparent", color: T.inkSoft, fontFamily: bodyFont, fontSize: 14, fontWeight: 600,
+};
+const ghostBtn = {
+  display: "inline-flex", alignItems: "center", gap: 6,
+  padding: "8px 14px", borderRadius: 8, border: `1px solid ${T.border}`, cursor: "pointer",
+  background: T.surface, fontFamily: bodyFont, fontSize: 12, fontWeight: 600, color: T.ink,
+};
+
+function Pill({ children, tone = "neutral" }) {
+  const tones = {
+    neutral: { bg: T.surfaceSoft, fg: T.inkSoft }, gold: { bg: T.goldSoft, fg: "#8A5B12" },
+    teal: { bg: T.tealSoft, fg: T.teal }, berry: { bg: T.berrySoft, fg: T.berry },
+    indigo: { bg: T.indigoSoft, fg: T.indigo },
+  };
+  const c = tones[tone];
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 999,
+      fontSize: 12, fontWeight: 600, background: c.bg, color: c.fg, fontFamily: bodyFont, letterSpacing: 0.2 }}>{children}</span>
+  );
+}
+
+function ProgressRing({ percent, size = 120, stroke = 10 }) {
+  const r = (size - stroke) / 2, c = 2 * Math.PI * r, off = c - (percent / 100) * c;
+  return (
+    <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+      <circle cx={size / 2} cy={size / 2} r={r} stroke={T.border} strokeWidth={stroke} fill="none" />
+      <circle cx={size / 2} cy={size / 2} r={r} stroke={T.gold} strokeWidth={stroke} fill="none"
+        strokeDasharray={c} strokeDashoffset={off} strokeLinecap="round" style={{ transition: "stroke-dashoffset 0.6s ease" }} />
+    </svg>
+  );
+}
+
+function Card({ children, style, onClick }) {
+  return (
+    <div onClick={onClick} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16,
+      padding: 20, cursor: onClick ? "pointer" : "default", ...style }}>{children}</div>
+  );
+}
+
+function NavButton({ icon: Icon, label, active, onClick }) {
+  return (
+    <button onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%",
+      padding: "10px 14px", borderRadius: 10, border: "none", cursor: "pointer",
+      background: active ? T.ink : "transparent", color: active ? T.surface : T.inkSoft,
+      fontFamily: bodyFont, fontSize: 14, fontWeight: 600, textAlign: "left", transition: "background 0.15s ease" }}>
+      <Icon size={17} strokeWidth={2} />{label}
+    </button>
+  );
+}
+
+function SectionLabel({ children }) {
+  return <div style={{ fontFamily: bodyFont, fontSize: 12, fontWeight: 700, color: T.inkFaint, textTransform: "uppercase", letterSpacing: 0.6 }}>{children}</div>;
+}
+
+function PageHeader({ eyebrow, title }) {
+  return (
+    <div style={{ marginBottom: 24 }}>
+      {eyebrow && <div style={{ fontFamily: bodyFont, fontSize: 13, fontWeight: 600, color: T.gold, marginBottom: 4 }}>{eyebrow}</div>}
+      <h1 style={{ fontFamily: displayFont, fontSize: 30, fontWeight: 600, color: T.ink, margin: 0 }}>{title}</h1>
+    </div>
+  );
+}
+
+function MetaRow({ label, value }) {
+  return (
+    <div>
+      <div style={{ fontFamily: bodyFont, fontSize: 11, color: T.inkFaint }}>{label}</div>
+      <div style={{ fontFamily: bodyFont, fontSize: 13, fontWeight: 600, color: T.ink }}>{value}</div>
+    </div>
+  );
+}
+
+function TermRow({ term, def }) {
+  return (
+    <div style={{ display: "flex", gap: 10 }}>
+      <div style={{ fontFamily: bodyFont, fontSize: 13, fontWeight: 700, color: T.ink, minWidth: 150 }}>{term}</div>
+      <div style={{ fontFamily: bodyFont, fontSize: 13, color: T.inkSoft, lineHeight: 1.5 }}>{def}</div>
+    </div>
+  );
+}
+
+/* ============================================================
+   ХРАНИЛИЩЕ. Состояние пользователя сохраняется в localStorage
+   браузера под одним ключом.
+   ============================================================ */
+
+const STORAGE_KEY = "biocard_academy_state_v2";
+
+function loadState() {
+  try {
+    const value = window.localStorage.getItem(STORAGE_KEY);
+    return value ? JSON.parse(value) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveState(state) {
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // Storage may be unavailable in private browsing or restricted environments.
+  }
+}
+
+/* ============================================================
+   ИИ-НАСТАВНИК. Реальная проверка практических ответов через
+   Anthropic API. При ошибке сети — честное сообщение об этом,
+   а не имитация персональной обратной связи.
+   ============================================================ */
+
+async function callAIMentor({ task, answer, context }) {
+  const endpoint = import.meta.env.VITE_AI_MENTOR_URL;
+
+  if (!endpoint) {
+    return {
+      ok: false,
+      text: "Ответ сохранён. ИИ-наставник пока не подключён: добавьте адрес серверного API в переменную VITE_AI_MENTOR_URL.",
+    };
+  }
+
+  const system = `Ты — академический наставник курса BIOCARD Marketing Academy. Оцени практический ответ студента по рубрике: понятность, соответствие вопросу, наличие аргумента, использование понятий урока, конкретность, связь с рабочей ситуацией. Не хвали автоматически. Структура ответа (коротко, по-русски, без markdown-заголовков): 1) Результат — что выполнено. 2) Сильная сторона — один конкретный элемент. 3) Критическая ошибка — если есть, где нарушена логика. 4) Риск — к чему это приведёт в реальной работе. 5) Что исправить — конкретный следующий шаг. Будь краток (6–9 предложений суммарно), профессионален, без общих фраз вроде «отличная работа».`;
+  const user = `Контекст пользователя: ${context || "специалист по маркетингу и коммуникациям"}.\nЗадание: ${task}\nОтвет студента: ${answer}`;
+
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ system, user }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`AI mentor request failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const text = typeof data.text === "string" ? data.text.trim() : "";
+
+    if (!text) {
+      throw new Error("AI mentor returned an empty response");
+    }
+
+    return { ok: true, text };
+  } catch {
+    return {
+      ok: false,
+      text: "Ответ сохранён. ИИ-наставник сейчас недоступен — попробуйте ещё раз позже.",
+    };
+  }
+}
+
+function shuffle(arr, seed) {
+  const a = arr.map((x, i) => [x, i]);
+  let s = seed || Math.floor(Math.random() * 100000);
+  for (let i = a.length - 1; i > 0; i--) {
+    s = (s * 9301 + 49297) % 233280;
+    const j = Math.floor((s / 233280) * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a.map(([x]) => x);
+}
+
+/* ============================================================
+   BIOCARD — подтверждённый профессиональный контекст.
+   Заполненные поля считаются достоверными (паспорт пользователя),
+   поля «уточнить» задаются как реальные вопросы онбординга.
+   ============================================================ */
+
+const BIOCARD_CONTEXT = {
+  company: "BIOCARD",
+  sphere: "Фармацевтическая логистика, поставки медицинской продукции, корпоративные и внешние коммуникации",
+  directions: ["SMM и корпоративные соцсети", "Внутренние коммуникации", "HR-бренд и вакансии", "Видео и интервью", "Коммуникация с руководителями"],
+  tasks: "Посты, сценарии и вопросы для интервью, анонсы, вакансии, внутренние рассылки, контент-планы, адаптация материалов под разные каналы",
+  textPreference: "Живой человеческий язык без канцелярита и признаков генерации ИИ",
+};
+
+/* ============================================================
+   ОНБОРДИНГ — короткие последовательные шаги. Подтверждённый
+   контекст BIOCARD применяется автоматически; «уточнить»-поля
+   из паспорта задаются как реальные вопросы, без догадок.
+   ============================================================ */
+
+const ONBOARD_STEPS = [
+  { key: "preferredName", type: "text", title: "Как к вам обращаться внутри курса?", placeholder: "Имя или как вам удобно" },
+  { key: "position", type: "text", title: "Как называется ваша должность сейчас?", placeholder: "Например: специалист по коммуникациям" },
+  { key: "experience", type: "single", title: "Сколько лет вы регулярно выполняете такие задачи?",
+    options: ["Меньше 1 года", "1–3 года", "3–7 лет", "Больше 7 лет"] },
+  { key: "autonomy", type: "single", title: "Какие решения вы принимаете самостоятельно?",
+    options: ["Согласую большинство решений", "Решаю тактические задачи сам, стратегию — согласую", "Принимаю большинство решений самостоятельно"] },
+  { key: "team", type: "multi", title: "Есть ли у вас команда или подрядчики?",
+    options: ["Работаю один", "Дизайнер", "Видеограф / монтажёр", "SMM-помощник", "Внешнее агентство", "Другое"] },
+  { key: "weeklyTime", type: "single", title: "Сколько часов в неделю вы реально готовы уделять обучению?",
+    options: ["До 2 часов", "2–5 часов", "5–10 часов", "Больше 10 часов"] },
+  { key: "sessionLength", type: "single", title: "Какой формат занятия удобнее?",
+    options: ["20–30 минут", "45–60 минут", "90 минут"] },
+  { key: "priority", type: "text", title: "Какой реальный проект должен улучшиться благодаря курсу за 3 месяца?", placeholder: "Например: система вакансий и HR-бренд" },
+  { key: "dataAccess", type: "single", title: "Какие данные каналов и кампаний вам доступны?",
+    options: ["Полный доступ к метрикам", "Частичный доступ / через отчёты", "Доступа к аналитике нет", "Другое"] },
+  { key: "confidentiality", type: "text", title: "Что нельзя использовать в учебных кейсах?", placeholder: "Необязательно — например: реальные контракты, медицинские данные", optional: true },
+];
+
+function OnboardStepField({ step, value, onChange }) {
+  if (step.type === "text") {
+    return (
+      <textarea
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={step.placeholder}
+        style={{ width: "100%", minHeight: 70, padding: 14, borderRadius: 10, border: `1px solid ${T.border}`,
+          fontFamily: bodyFont, fontSize: 15, color: T.ink, resize: "vertical", boxSizing: "border-box" }}
+      />
+    );
+  }
+  if (step.type === "single") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {step.options.map((opt) => (
+          <button key={opt} onClick={() => onChange(opt)} style={{
+            textAlign: "left", padding: "14px 16px", borderRadius: 12,
+            border: `1.5px solid ${value === opt ? T.ink : T.border}`,
+            background: value === opt ? T.ink : T.surface, color: value === opt ? T.surface : T.ink,
+            fontFamily: bodyFont, fontSize: 15, fontWeight: 500, cursor: "pointer",
+            display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            {opt}{value === opt && <Check size={16} />}
+          </button>
+        ))}
+      </div>
+    );
+  }
+  if (step.type === "multi") {
+    const sel = Array.isArray(value) ? value : [];
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {step.options.map((opt) => {
+          const isSel = sel.includes(opt);
+          return (
+            <button key={opt} onClick={() => onChange(isSel ? sel.filter((x) => x !== opt) : [...sel, opt])} style={{
+              textAlign: "left", padding: "14px 16px", borderRadius: 12,
+              border: `1.5px solid ${isSel ? T.ink : T.border}`,
+              background: isSel ? T.ink : T.surface, color: isSel ? T.surface : T.ink,
+              fontFamily: bodyFont, fontSize: 15, fontWeight: 500, cursor: "pointer",
+              display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              {opt}{isSel && <Check size={16} />}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+  return null;
+}
+
+function Onboarding({ onFinish }) {
+  const [idx, setIdx] = useState(-1); // -1 = приветствие
+  const [answers, setAnswers] = useState({});
+
+  if (idx === -1) {
+    return (
+      <div style={{ minHeight: "100vh", background: T.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <div style={{ width: "100%", maxWidth: 560 }}>
+          <Pill tone="gold"><Sparkles size={13} /> BIOCARD Marketing Academy</Pill>
+          <h1 style={{ fontFamily: displayFont, fontSize: 38, fontWeight: 600, margin: "16px 0 12px", color: T.ink, lineHeight: 1.15 }}>
+            Прежде чем начать
+          </h1>
+          <p style={{ fontFamily: bodyFont, fontSize: 15, color: T.inkSoft, lineHeight: 1.6, maxWidth: 480, marginBottom: 8 }}>
+            Компания, сфера и ключевые направления вашей работы уже известны из паспорта пользователя —
+            фармацевтическая логистика, внешние и внутренние коммуникации, SMM, HR-бренд. Их не нужно повторять.
+          </p>
+          <p style={{ fontFamily: bodyFont, fontSize: 15, color: T.inkSoft, lineHeight: 1.6, maxWidth: 480, marginBottom: 8 }}>
+            Осталось уточнить {ONBOARD_STEPS.length} коротких пунктов — они определят темп, глубину и примеры
+            в курсе. Дальше — честная диагностика в трёх частях, без баллов «на глазок».
+          </p>
+          <button onClick={() => setIdx(0)} style={primaryBtn}>Начать <ArrowRight size={16} /></button>
+        </div>
+      </div>
+    );
+  }
+
+  const step = ONBOARD_STEPS[idx];
+  const val = answers[step.key];
+  const canNext = step.optional || (step.type === "multi" ? (val && val.length > 0) : !!val);
+
+  return (
+    <div style={{ minHeight: "100vh", background: T.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div style={{ width: "100%", maxWidth: 560 }}>
+        <div style={{ display: "flex", gap: 6, marginBottom: 28 }}>
+          {ONBOARD_STEPS.map((_, i) => (
+            <div key={i} style={{ height: 4, borderRadius: 2, flex: 1, background: i <= idx ? T.gold : T.border, transition: "background 0.3s ease" }} />
+          ))}
+        </div>
+        <SectionLabel>Шаг {idx + 1} из {ONBOARD_STEPS.length}</SectionLabel>
+        <h2 style={{ fontFamily: displayFont, fontSize: 26, fontWeight: 600, color: T.ink, margin: "8px 0 20px" }}>{step.title}</h2>
+        <OnboardStepField step={step} value={val} onChange={(v) => setAnswers({ ...answers, [step.key]: v })} />
+        <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
+          <button onClick={() => setIdx(idx - 1)} style={secondaryBtn}><ArrowLeft size={15} /> Назад</button>
+          <button
+            onClick={() => idx < ONBOARD_STEPS.length - 1 ? setIdx(idx + 1) : onFinish({ ...BIOCARD_CONTEXT, ...answers })}
+            disabled={!canNext}
+            style={{ ...primaryBtn, marginTop: 0, opacity: canNext ? 1 : 0.4 }}>
+            {idx < ONBOARD_STEPS.length - 1 ? "Далее" : "К диагностике"} <ArrowRight size={15} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   ДИАГНОСТИКА — часть A (фундамент), часть B (кейсы), часть C
+   (открытая работа под профиль). Ответы не раскрываются до
+   конца всей диагностики; варианты перемешиваются каждый раз.
+   ============================================================ */
+
+const PART_A = [
+  { id: "a1", tag: "terms", q: "Компания вложилась в рекламу нового продукта, но не изменила ни цену, ни каналы продаж, ни сам продукт. Что из этого является маркетингом, а что — только рекламой?",
+    options: [
+      { t: "Реклама — часть маркетинга; маркетинг шире и включает решения о продукте, цене и каналах, а не только сообщение", correct: true },
+      { t: "Реклама и маркетинг — синонимы, разницы нет" },
+      { t: "Маркетинг — это только реклама, а цена и каналы к нему не относятся" },
+      { t: "Реклама всегда шире маркетинга и включает его в себя" },
+    ] },
+  { id: "a2", tag: "terms", q: "Чем PR принципиально отличается от рекламы?", options: [
+      { t: "PR управляет репутацией и отношениями со СМИ и обществом, часто без прямой оплаты за размещение", correct: true },
+      { t: "PR — это просто более дорогая реклама" },
+      { t: "PR никак не связан с маркетингом" },
+      { t: "PR и реклама всегда покупаются в одном и том же бюджете и неразличимы" },
+    ] },
+  { id: "a3", tag: "terms", q: "Продажи как функция отличаются от маркетинга тем, что:", options: [
+      { t: "Продажи — завершающий этап пути клиента, а маркетинг готовит почву — формирует спрос заранее", correct: true },
+      { t: "Продажи и маркетинг — одна и та же функция под разными названиями" },
+      { t: "Маркетинг начинается только после того, как продажи не сработали" },
+      { t: "Продажи не имеют отношения к пути клиента" },
+    ] },
+  { id: "a4", tag: "terms", q: "Брендинг в первую очередь отвечает за:", options: [
+      { t: "Расчёт бюджета кампании" },
+      { t: "Образ компании в сознании аудитории — имя, стиль, характер, ассоциации", correct: true },
+      { t: "Логистику и сроки поставки" },
+      { t: "Юридическое оформление сделок" },
+    ] },
+  { id: "a5", tag: "concepts", q: "Разница между потребностью и желанием в том, что:", options: [
+      { t: "Это синонимы, различий нет" },
+      { t: "Потребность — базовое ощущение нехватки, желание — её конкретная форма под влиянием культуры и личности", correct: true },
+      { t: "Желание существует раньше потребности" },
+      { t: "Потребность создаётся маркетингом, а желание — нет" },
+    ] },
+  { id: "a6", tag: "concepts", q: "Два человека одинаково хотят один и тот же продукт, но купить может только один — у него есть на это деньги. У кого из них есть спрос?", options: [
+      { t: "У обоих в равной мере" },
+      { t: "Ни у кого, спрос появляется только на распродаже" },
+      { t: "Только у того, кто готов и способен заплатить", correct: true },
+      { t: "У того, кто громче заявляет о своём интересе" },
+    ] },
+  { id: "a7", tag: "concepts", q: "Ценность продукта для клиента определяется как:", options: [
+      { t: "Розничная цена продукта" },
+      { t: "Соотношение выгод, которые получает клиент, и издержек — денег, времени, усилий, которые он тратит", correct: true },
+      { t: "Себестоимость производства" },
+      { t: "Количество функций у продукта" },
+    ] },
+  { id: "a8", tag: "goals", q: "«Мы хотим стать заметнее в отрасли» — это, скорее всего:", options: [
+      { t: "Чёткая маркетинговая цель, готовая к работе" },
+      { t: "Формулировка, которую нужно ещё довести до измеримой цели с метрикой и сроком", correct: true },
+      { t: "Уже готовая стратегия" },
+      { t: "Тактика, а не цель" },
+    ] },
+  { id: "a9", tag: "goals", q: "Отличие стратегии от тактики в том, что:", options: [
+      { t: "Стратегия — это выбор общего направления и приоритетов, тактика — конкретные действия для его реализации", correct: true },
+      { t: "Тактика определяет цели бизнеса, а стратегия — только каналы" },
+      { t: "Это взаимозаменяемые понятия" },
+      { t: "Стратегия — это просто более длинный список задач" },
+    ] },
+  { id: "a10", tag: "models", q: "Модель STP используется для того, чтобы:", options: [
+      { t: "Рассчитать рекламный бюджет" },
+      { t: "Выбрать аудиторию: сегментировать рынок, выбрать целевой сегмент и сформулировать позиционирование", correct: true },
+      { t: "Составить план продаж на квартал" },
+      { t: "Оценить итоговую удовлетворённость клиентов" },
+    ] },
+  { id: "a11", tag: "models", q: "Customer Journey как модель описывает:", options: [
+      { t: "Только этап рекламной кампании" },
+      { t: "Весь путь клиента от узнавания о продукте до покупки и повторного обращения через все точки контакта", correct: true },
+      { t: "Организационную структуру отдела маркетинга" },
+      { t: "Расчёт цены на разных этапах производства" },
+    ] },
+  { id: "a12", tag: "models", q: "Маркетинговая воронка показывает:", options: [
+      { t: "Как широкая аудитория постепенно сужается до узкого круга покупателей", correct: true },
+      { t: "Как распределить сотрудников по отделам" },
+      { t: "Как выбрать рекламный канал" },
+      { t: "Как рассчитать себестоимость продукта" },
+    ] },
+];
+
+const PART_B = [
+  { id: "b1", tag: "diagnosis", q: "Компания увеличивает рекламный бюджет второй месяц подряд, но продажи не растут. Что стоит проверить в первую очередь?", options: [
+      { t: "Сразу удвоить бюджет ещё раз" },
+      { t: "Отделить, в чём именно проблема — в аудитории, продукте, цене, доверии или измерении результата — прежде чем менять бюджет", correct: true },
+      { t: "Полностью остановить весь маркетинг" },
+      { t: "Сменить агентство, не разбираясь в причине" },
+    ] },
+  { id: "b2", tag: "diagnosis", q: "Руководитель называет контент-план стратегией и просит «согласовать стратегию» за 15 минут. Разумная реакция:", options: [
+      { t: "Молча согласовать, чтобы не спорить с руководителем" },
+      { t: "Уточнить: контент-план — это тактический инструмент; для стратегии нужны цель, аудитория и позиционирование, на которые план должен опираться", correct: true },
+      { t: "Отказаться от задачи полностью" },
+      { t: "Переименовать контент-план в «стратегию» в документе" },
+    ] },
+  { id: "b3", tag: "diagnosis", q: "У публикации высокий охват, но целевое действие (переход, заявка, отклик) почти отсутствует. Вероятная причина:", options: [
+      { t: "Охват сам по себе гарантирует результат, проблемы нет" },
+      { t: "Контент увидело много нерелевantных людей, либо сообщение не ведёт к чёткому действию — нужно проверить аудиторию и призыв к действию", correct: true },
+      { t: "Нужно просто ещё увеличить охват" },
+      { t: "Метрика охвата вообще не имеет значения" },
+    ] },
+  { id: "b4", tag: "diagnosis", q: "Сотрудники не понимают причины организационного изменения, хотя рассылка была отправлена. Вероятная причина:", options: [
+      { t: "Сообщение объяснило факт изменения, но не объяснило причину и не дало возможности задать вопросы", correct: true },
+      { t: "Сотрудники просто невнимательно читают письма" },
+      { t: "Рассылка была недостаточно красиво оформлена" },
+      { t: "Проблема точно в неправильном канале рассылки" },
+    ] },
+  { id: "b5", tag: "diagnosis", q: "Вакансия получает много просмотров, но мало релевантных откликов. Вероятная причина:", options: [
+      { t: "Нужно просто поднять зарплату в описании" },
+      { t: "Причина может быть в аудитории размещения, тексте задач, требованиях или процессе отклика — нужно диагностировать, а не менять один элемент наугад", correct: true },
+      { t: "Вакансии в принципе не работают как канал" },
+      { t: "Дело только в оформлении объявления" },
+    ] },
+  { id: "b6", tag: "diagnosis", q: "B2B-компания использует одно и то же сообщение для рядового пользователя продукта, финансового директора и генерального директора. Проблема в том, что:", options: [
+      { t: "Так и должно быть — сообщение должно быть одинаковым для консистentности" },
+      { t: "У разных участников закупочного центра разные критерии решения (удобство, стоимость владения, риски), и сообщение должно учитывать это различие", correct: true },
+      { t: "Различия внутри закупочного центра не влияют на маркетинг" },
+      { t: "Нужно просто сделать сообщение короче для всех" },
+    ] },
+];
+
+
+function DiagnosticIntro({ onStart }) {
+  return (
+    <div>
+      <Pill tone="indigo"><Target size={13} /> Диагностика в трёх частях</Pill>
+      <h2 style={{ fontFamily: displayFont, fontSize: 28, fontWeight: 600, color: T.ink, margin: "16px 0 10px" }}>
+        Честная диагностика, а не оценка «на глазок»
+      </h2>
+      <p style={{ fontFamily: bodyFont, fontSize: 15, color: T.inkSoft, lineHeight: 1.6, maxWidth: 500, marginBottom: 10 }}>
+        Часть A — {PART_A.length} заданий на фундаментальные понятия. Часть B — {PART_B.length} практических кейсов
+        с коротким обоснованием. Часть C — одна открытая работа под вашу реальную роль.
+      </p>
+      <p style={{ fontFamily: bodyFont, fontSize: 13, color: T.inkFaint, lineHeight: 1.6, marginBottom: 20 }}>
+        Правильность не показывается по ходу — результат вы увидите только после завершения всех трёх частей.
+        Двух вопросов недостаточно, чтобы утверждать «навык на 20%» — поэтому по итогам вы получите уровни
+        (недостаточно данных / начальный / базовый / уверенный / продвинутый), а не выдуманные проценты.
+      </p>
+      <div style={{ display: "flex", gap: 10 }}>
+        <button onClick={onStart} style={{ ...primaryBtn, marginTop: 0 }}>Начать диагностику <ArrowRight size={15} /></button>
+      </div>
+    </div>
+  );
+}
+
+function DiagnosticRunner({ onDone }) {
+  const [phase, setPhase] = useState("A"); // A | B | C | done-collecting
+  const seed = useMemo(() => Math.floor(Math.random() * 100000), []);
+  const [aIdx, setAIdx] = useState(0);
+  const [aAnswers, setAAnswers] = useState({});
+  const [aSelected, setASelected] = useState(null);
+  const [bIdx, setBIdx] = useState(0);
+  const [bAnswers, setBAnswers] = useState({});
+  const [bSelected, setBSelected] = useState(null);
+  const [bJustify, setBJustify] = useState("");
+  const [cAnswer, setCAnswer] = useState("");
+
+  const aShuffled = useMemo(() => PART_A.map((q, i) => ({ ...q, order: shuffle(q.options.map((_, oi) => oi), seed + i) })), [seed]);
+  const bShuffled = useMemo(() => PART_B.map((q, i) => ({ ...q, order: shuffle(q.options.map((_, oi) => oi), seed + 500 + i) })), [seed]);
+
+  if (phase === "A") {
+    const q = aShuffled[aIdx];
+    const orderedOptions = q.order.map((oi) => q.options[oi]);
+    return (
+      <div>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
+          <SectionLabel>Часть A · Вопрос {aIdx + 1} из {PART_A.length}</SectionLabel>
+          <Pill tone="indigo">Фундамент</Pill>
+        </div>
+        <Card>
+          <p style={{ fontFamily: bodyFont, fontSize: 16, fontWeight: 500, color: T.ink, lineHeight: 1.5, margin: "0 0 18px" }}>{q.q}</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {orderedOptions.map((opt, i) => (
+              <button key={i} onClick={() => setASelected(q.order[i])} style={{
+                textAlign: "left", padding: "13px 16px", borderRadius: 10, cursor: "pointer",
+                border: `1.5px solid ${aSelected === q.order[i] ? T.ink : T.border}`,
+                background: aSelected === q.order[i] ? T.surfaceSoft : T.surface,
+                fontFamily: bodyFont, fontSize: 14, color: T.ink }}>{opt.t}</button>
+            ))}
+          </div>
+          <button onClick={() => {
+            setAAnswers({ ...aAnswers, [q.id]: aSelected });
+            setASelected(null);
+            if (aIdx < PART_A.length - 1) setAIdx(aIdx + 1); else setPhase("B");
+          }} disabled={aSelected === null} style={{ ...primaryBtn, marginTop: 18, opacity: aSelected === null ? 0.4 : 1 }}>
+            {aIdx < PART_A.length - 1 ? "Далее" : "К части B"} <ArrowRight size={15} />
+          </button>
+        </Card>
+      </div>
+    );
+  }
+
+  if (phase === "B") {
+    const q = bShuffled[bIdx];
+    const orderedOptions = q.order.map((oi) => q.options[oi]);
+    return (
+      <div>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
+          <SectionLabel>Часть B · Кейс {bIdx + 1} из {PART_B.length}</SectionLabel>
+          <Pill tone="gold">Ход рассуждения</Pill>
+        </div>
+        <Card>
+          <p style={{ fontFamily: bodyFont, fontSize: 16, fontWeight: 500, color: T.ink, lineHeight: 1.5, margin: "0 0 18px" }}>{q.q}</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
+            {orderedOptions.map((opt, i) => (
+              <button key={i} onClick={() => setBSelected(q.order[i])} style={{
+                textAlign: "left", padding: "13px 16px", borderRadius: 10, cursor: "pointer",
+                border: `1.5px solid ${bSelected === q.order[i] ? T.ink : T.border}`,
+                background: bSelected === q.order[i] ? T.surfaceSoft : T.surface,
+                fontFamily: bodyFont, fontSize: 14, color: T.ink }}>{opt.t}</button>
+            ))}
+          </div>
+          <SectionLabel>Коротко обоснуйте выбор</SectionLabel>
+          <textarea value={bJustify} onChange={(e) => setBJustify(e.target.value)} placeholder="Почему именно этот вариант?"
+            style={{ width: "100%", minHeight: 70, marginTop: 8, padding: 12, borderRadius: 10, border: `1px solid ${T.border}`,
+              fontFamily: bodyFont, fontSize: 13, color: T.ink, resize: "vertical", boxSizing: "border-box" }} />
+          <button onClick={() => {
+            setBAnswers({ ...bAnswers, [q.id]: { selected: bSelected, justify: bJustify } });
+            setBSelected(null); setBJustify("");
+            if (bIdx < PART_B.length - 1) setBIdx(bIdx + 1); else setPhase("C");
+          }} disabled={bSelected === null} style={{ ...primaryBtn, marginTop: 18, opacity: bSelected === null ? 0.4 : 1 }}>
+            {bIdx < PART_B.length - 1 ? "Далее" : "К части C"} <ArrowRight size={15} />
+          </button>
+        </Card>
+      </div>
+    );
+  }
+
+  if (phase === "C") {
+    return (
+      <div>
+        <SectionLabel>Часть C · Открытая работа</SectionLabel>
+        <Card style={{ marginTop: 14 }}>
+          <p style={{ fontFamily: bodyFont, fontSize: 15, color: T.ink, lineHeight: 1.6, marginBottom: 16 }}>
+            Опишите одну реальную или типичную для вас коммуникационную задачу за последний месяц: какая была цель,
+            кому она адресована и как вы поняли бы, что задача решена. Если такой задачи не было — смоделируйте её.
+          </p>
+          <textarea value={cAnswer} onChange={(e) => setCAnswer(e.target.value)} placeholder="Опишите задачу своими словами…"
+            style={{ width: "100%", minHeight: 140, padding: 14, borderRadius: 10, border: `1px solid ${T.border}`,
+              fontFamily: bodyFont, fontSize: 14, color: T.ink, resize: "vertical", boxSizing: "border-box" }} />
+          <button onClick={() => onDone({ a: aAnswers, b: bAnswers, c: cAnswer })} disabled={!cAnswer.trim()}
+            style={{ ...primaryBtn, opacity: cAnswer.trim() ? 1 : 0.4 }}>
+            Завершить диагностику <ArrowRight size={15} />
+          </button>
+        </Card>
+      </div>
+    );
+  }
+  return null;
+}
+
+/* Компетенции: собраны из тегов части A и части B. Часть C —
+   качественная работа, не даёт числовой доли, но фиксируется как
+   первое портфолио-свидетельство. */
+const COMPETENCY_META = [
+  { key: "terms", label: "Разграничение маркетинга, рекламы, PR, продаж, брендинга", tags: ["terms"], part: "A" },
+  { key: "concepts", label: "Потребность, желание, спрос, ценность", tags: ["concepts"], part: "A" },
+  { key: "goals", label: "Цель, стратегия, тактика, инструмент", tags: ["goals"], part: "A" },
+  { key: "models", label: "STP, 4P, Customer Journey, воронка", tags: ["models"], part: "A" },
+  { key: "diagnosis", label: "Диагностика реальной коммуникационной проблемы", tags: ["diagnosis"], part: "B" },
+];
+
+function levelFromRatio(ratio, evidence) {
+  if (evidence < 2) return "недостаточно данных";
+  if (ratio < 0.4) return "начальный";
+  if (ratio < 0.65) return "базовый";
+  if (ratio < 0.85) return "уверенный";
+  return "продвинутый";
+}
+function confidenceFromEvidence(evidence) {
+  if (evidence < 2) return "низкая";
+  if (evidence < 4) return "средняя";
+  return "высокая";
+}
+
+function computeCompetencyProfile(diag) {
+  return COMPETENCY_META.map((c) => {
+    let correct = 0, total = 0, wrongTopics = [];
+    if (c.part === "A") {
+      PART_A.filter((q) => c.tags.includes(q.tag)).forEach((q) => {
+        total += 1;
+        const sel = diag.a[q.id];
+        const isRight = sel !== undefined && q.options[sel] && q.options[sel].correct;
+        if (isRight) correct += 1; else wrongTopics.push(q.q.slice(0, 60) + "…");
+      });
+    } else {
+      PART_B.filter((q) => c.tags.includes(q.tag)).forEach((q) => {
+        total += 1;
+        const sel = diag.b[q.id] && diag.b[q.id].selected;
+        const isRight = sel !== undefined && q.options[sel] && q.options[sel].correct;
+        if (isRight) correct += 1; else wrongTopics.push(q.q.slice(0, 60) + "…");
+      });
+    }
+    const ratio = total ? correct / total : 0;
+    return {
+      key: c.key, label: c.label, evidence: total, correct,
+      level: levelFromRatio(ratio, total), confidence: confidenceFromEvidence(total),
+      wrongTopics, lastChecked: new Date().toISOString().slice(0, 10),
+    };
+  });
+}
+
+function DiagnosticResults({ competencies, onFinish }) {
+  return (
+    <div>
+      <Pill tone="teal"><Trophy size={13} /> Диагностика завершена</Pill>
+      <h2 style={{ fontFamily: displayFont, fontSize: 28, fontWeight: 600, color: T.ink, margin: "16px 0 6px" }}>Ваш обоснованный профиль</h2>
+      <p style={{ fontFamily: bodyFont, fontSize: 14, color: T.inkFaint, marginBottom: 20, maxWidth: 540 }}>
+        Уровни ниже — не проценты, а честная оценка по количеству заданий-подтверждений. Там, где заданий было
+        мало, так и указано: «недостаточно данных». Это нормально на старте — карта уточнится по ходу практики.
+      </p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
+        {competencies.map((c) => (
+          <Card key={c.key}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+              <div>
+                <div style={{ fontFamily: bodyFont, fontSize: 14, fontWeight: 600, color: T.ink }}>{c.label}</div>
+                <div style={{ fontFamily: bodyFont, fontSize: 12, color: T.inkFaint, marginTop: 4 }}>
+                  {c.evidence} заданий · уверенность оценки: {c.confidence}
+                </div>
+              </div>
+              <Pill tone={c.level === "недостаточно данных" ? "neutral" : c.level === "начальный" ? "berry" : c.level === "базовый" ? "gold" : "teal"}>{c.level}</Pill>
+            </div>
+          </Card>
+        ))}
+      </div>
+      <Card style={{ marginBottom: 20, background: T.surfaceSoft, border: "none" }}>
+        <div style={{ display: "flex", gap: 10 }}>
+          <Info size={16} color={T.inkFaint} style={{ flexShrink: 0, marginTop: 2 }} />
+          <p style={{ fontFamily: bodyFont, fontSize: 13, color: T.inkFaint, margin: 0, lineHeight: 1.6 }}>
+            Часть C сохранена как первое свидетельство в вашем портфолио — её содержательную проверку
+            даст ИИ-наставник внутри первого модуля.
+          </p>
+        </div>
+      </Card>
+      <button onClick={onFinish} style={{ ...primaryBtn, width: "100%", justifyContent: "center" }}>
+        Перейти к обучению <ArrowRight size={15} />
+      </button>
+    </div>
+  );
+}
+
+function Onboard_Diagnostic_Flow({ onComplete }) {
+  const [stage, setStage] = useState("intro"); // intro | run | results
+  const [competencies, setCompetencies] = useState(null);
+  const [rawDiag, setRawDiag] = useState(null);
+
+  return (
+    <div style={{ minHeight: "100vh", background: T.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div style={{ width: "100%", maxWidth: 620 }}>
+        {stage === "intro" && <DiagnosticIntro onStart={() => setStage("run")} />}
+        {stage === "run" && (
+          <DiagnosticRunner onDone={(diag) => {
+            setRawDiag(diag);
+            setCompetencies(computeCompetencyProfile(diag));
+            setStage("results");
+          }} />
+        )}
+        {stage === "results" && competencies && (
+          <DiagnosticResults competencies={competencies} onFinish={() => onComplete({ competencies, rawDiag })} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   МОДУЛЬ 1 — содержание уроков 1–2 из паспорта модуля BIOCARD
+   Marketing Academy. Уроки 3–8 намеренно оставлены как качественные
+   карточки-анонсы (не полный текст) — так решено в этой итерации.
+   ============================================================ */
+
+const MODULE1_LESSON_META = [
+  { id: 1, title: "Возникновение маркетинга", question: "Почему бизнесу стало недостаточно производить и продавать?", duration: "≈ 45 мин", built: true },
+  { id: 2, title: "Эволюция маркетинговых концепций", question: "Как менялась ориентация компании при принятии решений?", duration: "≈ 50 мин", built: true },
+  { id: 3, title: "Что такое современный маркетинг", question: "Что входит в маркетинг сегодня?", duration: "≈ 35 мин", built: false,
+    results: ["Сопоставлять несколько признанных определений маркетинга", "Различать задачи и функции маркетинга", "Объяснять маркетинг руководителю без сведения к каналам"] },
+  { id: 4, title: "Маркетинг в системе бизнеса", question: "Где заканчивается маркетинг и начинается работа других функций?", duration: "≈ 35 мин", built: false,
+    results: ["Карта взаимодействия с продажами, продуктом, PR, HR, логистикой и финансами", "Различение маркетинга и смежных функций на практике"] },
+  { id: 5, title: "Базовые понятия маркетинга", question: "Что именно создаёт и оценивает клиент?", duration: "≈ 30 мин", built: false,
+    results: ["Точное использование потребности, желания, спроса, ценности, удовлетворённости, лояльности"] },
+  { id: 6, title: "Базовые модели: вводный уровень", question: "Какая модель отвечает на какой вопрос?", duration: "≈ 30 мин", built: false,
+    results: ["Узнавание STP, 4P/7P, AIDA, Customer Journey, воронки", "Понимание ограничений каждой модели"] },
+  { id: 7, title: "Современные направления", question: "Что меняется, а что остаётся фундаментом?", duration: "≈ 30 мин", built: false,
+    results: ["Различение устойчивых принципов и актуальных платформенных практик"] },
+  { id: 8, title: "Интеграция и итоговая работа", question: "Как увидеть маркетинг как систему?", duration: "≈ 60 мин", built: false,
+    results: ["Аналитический разбор реальной или учебной компании", "Диагностика проблемы вместо преждевременного выбора инструмента"] },
+];
+
+const LESSON_CONTENT = {
+  1: {
+    place: "Урок 1 из 8 · открывает модуль «Основы современного маркетинга»",
+    prereq: "Предварительные знания не требуются",
+    results: [
+      "Объяснить, почему маркетинговые практики нельзя привязать к одной дате или одной стране",
+      "Показать связь между развитием массового производства, распределения, конкуренции и исследования рынка",
+      "Отличить наличие торговли и продвижения от маркетинга как оформленной управленческой дисциплины",
+    ],
+    problemInput: "Небольшая пекарня, где владелец лично знает каждого покупателя, открывает третью точку и перестаёт успевать. Что из «маркетинга» ей внезапно становится нужно — и почему раньше можно было без этого обходиться?",
+    theory: [
+      { label: "Маркетинговые практики существовали до маркетинга как дисциплины", text: "Обмен, репутация продавца, упаковка, ярмарки, рекомендации и адаптация товара к спросу существовали задолго до XX века. Некорректно говорить, что «до индустриальной эпохи бизнес работал без маркетинга» — меняется не наличие обмена, а системность и роль маркетинга в управлении организацией." },
+      { label: "Индустриализация и масштабирование", text: "Рост производительности, транспортной инфраструктуры и массового распределения увеличил расстояние между производителем и покупателем. Компании стали работать с более крупными и неоднородными рынками, где личного знания каждого клиента уже недостаточно." },
+      { label: "Конкуренция и неопределённость спроса", text: "Когда организация не может автоматически реализовать весь объём предложения, ей нужно оценивать спрос, различать покупателей, выбирать каналы, управлять ценой и сообщением. Маркетинг возникает как набор функций координации рынка, а затем — как самостоятельная область управления." },
+      { label: "Формирование академической дисциплины", text: "В начале XX века в университетах США стали появляться курсы по распределению, торговле и маркетингу. Это не значит, что маркетинг «изобрели» в этот момент — произошло оформление разрозненных практик в систематическую дисциплину." },
+    ],
+    limitations: "Схема «сначала дефицит, затем избыток предложения, затем маркетинг» полезна как упрощение, но не универсальный закон: на одном рынке одновременно могут существовать дефицит, жёсткая конкуренция и разные управленческие ориентации — а в разных странах и отраслях этот переход происходил не синхронно.",
+    terms: [
+      { term: "Маркетинговая практика", def: "Отдельное действие — адаптация товара, ценообразование, работа с репутацией — существовавшее и до оформления маркетинга как дисциплины" },
+      { term: "Маркетинг как дисциплина", def: "Систематизированная область управления, оформившаяся в начале XX века как ответ на рост и усложнение рынков" },
+      { term: "Неопределённость спроса", def: "Ситуация, при которой компания не может заранее знать, будет ли реализован весь объём предложения" },
+    ],
+    comparison: {
+      title: "Маркетинговые практики vs маркетинг как дисциплина",
+      rows: [
+        ["Что это", "Отдельные приёмы — торг, репутация, адаптация под спрос", "Систематизированная область управления компанией"],
+        ["Когда есть", "Практически в любой торговле, включая доиндустриальную", "Оформляется с ростом масштаба и неоднородности рынка"],
+        ["Риск путаницы", "Считать, что раз приёмы были всегда — «маркетинг был всегда»", "Считать, что дисциплина возникла в один день с одним изобретателем"],
+      ],
+    },
+    examples: {
+      neutral: "Небольшая пекарня может знать постоянных покупателей лично. При расширении в сеть ей нужны данные о покупателях, стандарты продукта, сегментация спроса и единая коммуникация вместо личного знания каждого клиента.",
+      b2b: "Поставщик логистических услуг не может ограничиться перечислением видов транспорта. Ему нужно понимать критерии разных участников закупки: сроки, сохранность груза, документы, риски, интеграцию с процессами клиента и полную стоимость владения.",
+      personal: "Учебный смоделированный кейс BIOCARD: коммуникация о надёжности фармацевтической логистики убеждает не за счёт эпитетов о качестве, а когда она явно связана с реальными процессами контроля, сроками и требованиями клиентов — иначе это отдельный рекламный тезис, оторванный от процесса.",
+    },
+    mistakes: [
+      "Утверждать, что маркетинг появился только после рекламы или социальных сетей",
+      "Описывать историю как единую последовательность, одинаковую для всех отраслей и стран",
+      "Считать, что при высоком спросе маркетинг совсем не нужен — выбор продукта, цены, распределения и отношений остаётся всегда",
+    ],
+    microcheck: { q: "Что именно появляется как ответ на рост рынков и рост неопределённости спроса — а не сам факт продажи товара?", a: "Системная координация решений о клиенте и оформленная управленческая дисциплина, а не отдельные разрозненные приёмы продвижения." },
+    practice: {
+      micro: "Назовите три изменения, которые происходят с коммуникацией компании при переходе от локальной работы к масштабированию.",
+      main: "Опишите, какие маркетинговые функции требуются фармацевтической логистической компании помимо продвижения.",
+      advanced: "Сравните две ситуации: дефицит критически важного товара и насыщенный рынок услуг. Какие задачи маркетинга сохраняются в обеих, а какие меняются?",
+    },
+    reflection: "Что изменилось в вашем понимании маркетинга после этого урока? Где в вашей работе на этой неделе вы могли бы применить различие между «отдельной практикой» и «системным подходом»?",
+    summary: [
+      "Маркетинговые практики старше маркетинга как дисциплины — путать одно с другим не стоит",
+      "Маркетинг оформляется как ответ на масштаб, неоднородность рынка и неопределённость спроса",
+      "Линейная история концепций — полезное упрощение, а не универсальный закон для всех рынков",
+      "Даже при высоком спросе задачи выбора продукта, цены и отношений с клиентом никуда не исчезают",
+    ],
+    sources: {
+      required: ["Kotler P., Keller K. L. — Marketing Management", "American Marketing Association — материалы по истории и определению маркетинга"],
+      additional: ["Bartels R. — The History of Marketing Thought", "Jones D. G. B., Monieson D. D. — Early Development of the Philosophy of Marketing Thought"],
+    },
+    quiz: [
+      { q: "Можно ли сказать, что до появления маркетинга как дисциплины бизнес работал «без маркетинга»?", type: "single",
+        options: [
+          { t: "Нет — элементы обмена, репутации и адаптации к спросу существовали и раньше; изменилась системность и роль маркетинга в управлении", correct: true },
+          { t: "Да, до XX века никакого учёта покупателя не было" }, { t: "Да, потому что не было рекламы" },
+          { t: "Нет, потому что торговля и маркетинг — всегда было одно и то же понятие" },
+        ],
+        explain: "Меняется не факт обмена, а его системность и место в управлении организацией." },
+      { q: "Небольшая пекарня расширяется в сеть и теряет личное знание каждого покупателя. Какая задача возникает в первую очередь?", type: "case",
+        options: [
+          { t: "Как можно быстрее увеличить рекламный бюджет" },
+          { t: "Нужны данные о покупателях, сегментация спроса и единая коммуникация вместо личного знания клиентов", correct: true },
+          { t: "Закрыть часть точек, чтобы вернуть личное знание клиентов" }, { t: "Ничего менять не нужно, масштаб не влияет на маркетинг" },
+        ],
+        explain: "Именно потеря личного контакта с каждым клиентом создаёт потребность в системной координации." },
+      { q: "Какие утверждения о схеме «дефицит → избыток → маркетинг» верны?", type: "multi",
+        options: [
+          { t: "Она полезна как упрощение", correct: true }, { t: "Она является универсальным законом для всех рынков и стран" },
+          { t: "На одном рынке могут одновременно существовать дефицит и разные ориентации компаний", correct: true },
+          { t: "Она точно определяет год возникновения маркетинга в любой отрасли" },
+        ],
+        explain: "Схема — рабочее упрощение, а не строгий универсальный закон, действующий одинаково везде." },
+      { q: "Коммуникация о надёжности фармацевтической логистики будет убедительнее, если она:", type: "single",
+        options: [
+          { t: "Использует как можно больше эмоциональных эпитетов о качестве" },
+          { t: "Связана с реальными процессами контроля, сроками и требованиями клиентов, а не существует как отдельный рекламный тезис", correct: true },
+          { t: "Копирует формулировки конкурентов" }, { t: "Избегает конкретики, чтобы не раскрывать детали процессов" },
+        ],
+        explain: "Доверие в B2B/фарма-контексте строится на связи сообщения с реальным процессом, а не на эпитетах." },
+      { q: "Поставщик логистических услуг ограничивается перечислением видов транспорта в материалах. Какой вероятный разрыв?", type: "case",
+        options: [
+          { t: "Он не учитывает реальные критерии участников закупки — сроки, сохранность, документы, риски, стоимость владения", correct: true },
+          { t: "Ему просто нужно снизить цену" }, { t: "Ему нужно больше рекламных каналов" },
+          { t: "Разрыва нет, перечисление транспорта — достаточная коммуникация для B2B" },
+        ],
+        explain: "B2B-решение почти всегда завязано на нескольких критериях, а не только на факте наличия транспорта." },
+    ],
+  },
+  2: {
+    place: "Урок 2 из 8",
+    prereq: "Урок 1: Возникновение маркетинга",
+    results: [
+      "Различать производственную, товарную, сбытовую и маркетинговую ориентации",
+      "Объяснять сильные стороны и риски каждой ориентации",
+      "Распознавать маркетинговую близорукость — концентрацию на продукте вместо задачи клиента",
+      "Понимать на вводном уровне маркетинг отношений, холистический и социально ответственный маркетинг",
+    ],
+    problemInput: "Отдел разработки гордится техническими характеристиками продукта, но продажи падают вопреки этому. Клиенты уходят к конкурентам с более простым продуктом. В какой управленческой логике застряла компания?",
+    theory: [
+      { label: "Производственная ориентация", text: "Приоритет получают эффективность, доступность и масштаб. Такая ориентация может быть рациональной при ограниченной доступности продукта или высокой чувствительности к цене. Риск — игнорирование изменения потребностей и качества опыта клиента." },
+      { label: "Товарная ориентация", text: "Компания делает ставку на характеристики, качество и совершенствование продукта. Риск — предположение, что техническое превосходство автоматически создаёт предпочтение покупателя." },
+      { label: "Сбытовая ориентация", text: "Внимание сосредоточено на стимулировании сделки и активных продажах. Может быть необходима для сложных или незнакомых продуктов, но становится проблемой, если заменяет работу с ценностью и продуктом." },
+      { label: "Маркетинговая ориентация", text: "Организация изучает рынок, выбирает аудиторию, создаёт ценность и координирует функции ради удовлетворения клиента и целей бизнеса. Это не означает безусловное исполнение любого пожелания клиента." },
+      { label: "Маркетинговая близорукость", text: "Теодор Левитт показал риск определения бизнеса через текущий продукт, а не через потребность клиента. Компания может улучшать продукт, который постепенно теряет значимость для реальной задачи клиента." },
+      { label: "Маркетинг отношений и холистический подход", text: "Маркетинг отношений переносит внимание с отдельной сделки на долгосрочное взаимодействие. Холистический маркетинг подчёркивает связь внутреннего, интегрированного и социально ответственного маркетинга с управлением отношениями." },
+    ],
+    limitations: "Ориентации — не жёсткие исторические стадии, после которых предыдущая исчезает полностью: компания может быть одновременно эффективной в производстве и рыночно ориентированной. Проблема не в самой эффективности, а в превращении одного критерия в единственный при принятии решений.",
+    terms: [
+      { term: "Маркетинговая близорукость", def: "Определение бизнеса через текущий продукт вместо потребности клиента, из-за чего компания рискует не заметить, что задача клиента решается иначе" },
+      { term: "Маркетинг отношений", def: "Подход, смещающий фокус с разовой сделки на выстраивание долгосрочной связи с клиентом" },
+      { term: "Холистический маркетинг", def: "Подход, объединяющий внутренний, интегрированный и социально ответственный маркетинг с управлением отношениями в единую систему" },
+    ],
+    comparison: {
+      title: "Четыре управленческие ориентации",
+      header: ["Ориентация", "Фокус", "Риск"],
+      rows: [
+        ["Производственная", "Эффективность, доступность, масштаб", "Игнорирование меняющихся потребностей и опыта клиента"],
+        ["Товарная", "Характеристики и качество продукта", "Вера, что превосходство продукта само создаёт спрос"],
+        ["Сбытовая", "Стимулирование сделки, активные продажи", "Подмена работы с ценностью давлением на покупку"],
+        ["Маркетинговая", "Ценность для выбранной аудитории", "Ошибочно трактуется как «клиент всегда прав»"],
+      ],
+    },
+    examples: {
+      neutral: "Учебный смоделированный кейс: компания одновременно эффективна в производстве и ориентирована на рынок. Проблема возникает не в самой эффективности, а в её превращении в единственный критерий при принятии решений.",
+      b2b: "Поставщик продаёт «складские услуги», хотя клиент фактически покупает снижение риска срыва поставок, прозрачность процессов и соответствие требованиям — сообщение описывает функцию, а не решаемую задачу.",
+      personal: "Учебный смоделированный кейс BIOCARD (внутренние коммуникации): сбытовая логика внутри компании проявляется, когда сотрудникам пытаются «продать» организационное изменение красивым сообщением, не меняя сам процесс и не объясняя причины.",
+    },
+    mistakes: [
+      "Считать ориентации жёсткими историческими стадиями, после которых предыдущие полностью исчезают",
+      "Считать маркетинговую ориентацию принципом «клиент всегда прав»",
+      "Путать социальную ответственность с отдельной благотворительной публикацией",
+    ],
+    microcheck: { q: "Чем маркетинговая близорукость отличается от простого технического консерватизма?", a: "Это не просто нежелание менять продукт, а определение всего бизнеса через текущий продукт вместо реальной задачи клиента — компания может активно улучшать продукт и всё равно потерять связь с потребностью." },
+    practice: {
+      micro: "По одному признаку распознайте каждую из четырёх ориентаций в коротких ситуациях из вашей практики.",
+      main: "Определите доминирующую ориентацию вашей компании на конкретном примере решения, а не по декларациям.",
+      advanced: "Предложите, как сохранить производственную эффективность и одновременно усилить рыночную ориентацию — без выбора «или-или».",
+    },
+    reflection: "В какой из четырёх ориентаций чаще всего действует ваша команда при принятии решений — и совпадает ли это с тем, как вы хотели бы, чтобы она действовала?",
+    summary: [
+      "Четыре ориентации — не строгие исторические эпохи, а логики решений, которые могут сосуществовать",
+      "Проблема производственной и товарной логики — не в эффективности или качестве самих по себе, а в их абсолютизации",
+      "Маркетинговая близорукость — это про определение бизнеса через продукт, а не про нежелание его менять",
+      "Маркетинговая ориентация не означает автоматическое согласие с любым пожеланием клиента",
+    ],
+    sources: {
+      required: ["Levitt T. — Marketing Myopia, Harvard Business Review", "Kotler P., Keller K. L. — Marketing Management"],
+      additional: ["Kohli A. K., Jaworski B. J. — Market Orientation: The Construct, Research Propositions, and Managerial Implications", "Narver J. C., Slater S. F. — The Effect of a Market Orientation on Business Profitability"],
+    },
+    quiz: [
+      { q: "Компания одновременно эффективна в производстве и ориентирована на рынок. В чём тогда может быть проблема?", type: "single",
+        options: [ { t: "Такого сочетания не бывает" }, { t: "Проблема не в эффективности, а в превращении её в единственный критерий решений", correct: true },
+          { t: "Проблема в том, что маркетинговая ориентация всегда противоречит эффективности" }, { t: "Проблема в том, что нужно полностью отказаться от контроля издержек" } ],
+        explain: "Ориентации могут сочетаться — риск в абсолютизации одного критерия." },
+      { q: "Поставщик продаёт «складские услуги», хотя клиент хочет снижения риска срыва поставок и соответствия требованиям. Это пример:", type: "case",
+        options: [ { t: "Логики, при которой сообщение описывает функцию, а не решаемую задачу клиента — признак маркетинговой близорукости", correct: true },
+          { t: "Правильно выстроенного маркетингового сообщения" }, { t: "Излишней клиентоориентированности" }, { t: "Проблемы ценообразования" } ],
+        explain: "Классический случай близорукости по Левитту — фокус на продукте/функции вместо задачи клиента." },
+      { q: "Что из перечисленного — признаки маркетинговой близорукости по Левитту?", type: "multi",
+        options: [ { t: "Определение бизнеса через текущий продукт, а не через задачу клиента", correct: true },
+          { t: "Улучшение продукта, который постепенно теряет значимость для клиента", correct: true },
+          { t: "Постоянная проверка, решает ли продукт актуальную задачу клиента" }, { t: "Ориентация на канал коммуникации вместо ориентации на цель" } ],
+        explain: "Оба верных варианта описывают саму суть близорукости; проверка актуальности задачи — как раз противоядие от неё." },
+      { q: "Сотрудникам «продают» изменение красивым сообщением, не меняя процесс и не объясняя причины. Какая логика применена ошибочно?", type: "case",
+        options: [ { t: "Маркетинговая ориентация" }, { t: "Сбытовая логика, перенесённая на внутренние коммуникации — упор на убеждение вместо решения причины", correct: true },
+          { t: "Холистический маркетинг" }, { t: "Товарная ориентация" } ],
+        explain: "Это сбытовая логика: давление и убеждение вместо изменения сути и объяснения причин." },
+      { q: "Реальная социальная ответственность отличается от разовой благотворительной публикации тем, что:", type: "single",
+        options: [ { t: "Она заметна только в одном посте раз в год" }, { t: "Она отражается в устойчивых практиках компании, а не только в отдельном сообщении", correct: true },
+          { t: "Она не требует никаких изменений в процессах" }, { t: "Она всегда важнее финансовых показателей компании" } ],
+        explain: "Ключевое отличие — устойчивость практик, а не факт единичной публикации." },
+    ],
+  },
+};
+
+/* ============================================================
+   УРОК — данные + рендер по академическому стандарту.
+   Практика проверяется реальным ИИ-наставником (Anthropic API),
+   с честным сообщением при недоступности сети.
+   ============================================================ */
+
+function AIFeedbackBox({ task, context, saved, onSave }) {
+  const [answer, setAnswer] = useState(saved?.answer || "");
+  const [feedback, setFeedback] = useState(saved?.feedback || null);
+  const [loading, setLoading] = useState(false);
+
+  async function submit() {
+    setLoading(true);
+    const res = await callAIMentor({ task, answer, context });
+    setFeedback(res.text);
+    setLoading(false);
+    onSave({ answer, feedback: res.text });
+  }
+
+  return (
+    <div>
+      <textarea value={answer} onChange={(e) => { setAnswer(e.target.value); }} placeholder="Ваш ответ…"
+        style={{ width: "100%", minHeight: 100, padding: 12, borderRadius: 10, border: `1px solid ${T.border}`,
+          fontFamily: bodyFont, fontSize: 13, color: T.ink, resize: "vertical", boxSizing: "border-box" }} />
+      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        <button onClick={() => onSave({ answer, feedback })} style={ghostBtn}><Save size={13} /> Сохранить черновик</button>
+        <button onClick={submit} disabled={!answer.trim() || loading} style={{ ...ghostBtn, opacity: !answer.trim() || loading ? 0.5 : 1 }}>
+          {loading ? <Loader2 size={13} className="spin" /> : <Send size={13} />} Отправить ИИ-наставнику
+        </button>
+      </div>
+      {feedback && (
+        <div style={{ marginTop: 12, padding: 14, borderRadius: 10, background: T.surfaceSoft }}>
+          <SectionLabel>Обратная связь</SectionLabel>
+          <p style={{ fontFamily: bodyFont, fontSize: 13, color: T.ink, lineHeight: 1.6, marginTop: 8, whiteSpace: "pre-wrap" }}>{feedback}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Lesson({ lessonId, onComplete, nextLabel, onBack, practiceStore, onPracticeSave, userContext }) {
+  const meta = MODULE1_LESSON_META.find((l) => l.id === lessonId);
+  const data = LESSON_CONTENT[lessonId];
+  const [tab, setTab] = useState("theory");
+  const [quizIdx, setQuizIdx] = useState(0);
+  const [selected, setSelected] = useState(null);
+  const [checked, setChecked] = useState(false);
+  const [score, setScore] = useState(0);
+  const [exampleTab, setExampleTab] = useState("neutral");
+  const [showCheck, setShowCheck] = useState(false);
+  const [reflection, setReflection] = useState("");
+  const seed = useMemo(() => Math.floor(Math.random() * 100000), [lessonId]);
+  const quizShuffled = useMemo(() => (data ? data.quiz.map((q, i) => ({ ...q, order: shuffle(q.options.map((_, oi) => oi), seed + i) })) : []), [data, seed]);
+
+  if (!data) {
+    return (
+      <div>
+        <button onClick={onBack} style={{ ...secondaryBtn, marginBottom: 20, padding: "8px 14px" }}><ArrowLeft size={14} /> К обзору модуля</button>
+        <Card style={{ maxWidth: 480 }}>
+          <SectionLabel>Урок анонсирован, но ещё не раскрыт</SectionLabel>
+          <p style={{ fontFamily: bodyFont, fontSize: 14, color: T.inkSoft, marginTop: 8 }}>
+            Структура утверждена и видна в обзоре модуля. Полное содержание появится в следующей итерации —
+            мы не публикуем поверхностный текст только ради галочки «готово».
+          </p>
+        </Card>
+      </div>
+    );
+  }
+
+  const tabs = [{ key: "theory", label: "Теория" }, { key: "practice", label: "Практика" }, { key: "test", label: "Тест" }, { key: "wrap", label: "Итоги" }];
+  const quiz = quizShuffled;
+  const q = quiz[quizIdx];
+  const orderedOptions = q ? q.order.map((oi) => q.options[oi]) : [];
+
+  function submitAnswer() { setChecked(true); if (q.options[selected].correct) setScore((s) => s + 1); }
+  function nextQuestion() {
+    if (quizIdx < quiz.length - 1) { setQuizIdx((i) => i + 1); setSelected(null); setChecked(false); }
+    else setTab("wrap");
+  }
+
+  const psKey = `l${lessonId}`;
+  const ps = practiceStore[psKey] || {};
+
+  return (
+    <div>
+      <button onClick={onBack} style={{ ...secondaryBtn, marginBottom: 20, padding: "8px 14px" }}><ArrowLeft size={14} /> К обзору модуля</button>
+      <div style={{ fontFamily: monoFont, fontSize: 12, color: T.inkFaint, marginBottom: 4 }}>{data.place.toUpperCase()}</div>
+      <h1 style={{ fontFamily: displayFont, fontSize: 30, fontWeight: 600, color: T.ink, margin: "0 0 6px" }}>{meta.title}</h1>
+      <p style={{ fontFamily: bodyFont, fontSize: 13, color: T.inkFaint, marginBottom: 20 }}>{data.prereq} · {meta.duration}</p>
+
+      <div style={{ display: "flex", gap: 6, marginBottom: 24, borderBottom: `1px solid ${T.border}` }}>
+        {tabs.map((t) => (
+          <button key={t.key} onClick={() => setTab(t.key)} style={{
+            padding: "10px 4px", marginRight: 22, border: "none", background: "none", cursor: "pointer",
+            fontFamily: bodyFont, fontSize: 14, fontWeight: 600, color: tab === t.key ? T.ink : T.inkFaint,
+            borderBottom: `2px solid ${tab === t.key ? T.gold : "transparent"}` }}>{t.label}</button>
+        ))}
+      </div>
+
+      {tab === "theory" && (
+        <div style={{ maxWidth: 660 }}>
+          <Card style={{ marginBottom: 16, background: T.indigoSoft, border: "none" }}>
+            <SectionLabel>Проблемный вход</SectionLabel>
+            <p style={{ fontFamily: bodyFont, fontSize: 15, color: T.ink, lineHeight: 1.6, marginTop: 8 }}>{data.problemInput}</p>
+          </Card>
+          <Card style={{ marginBottom: 16 }}>
+            <SectionLabel>Результаты урока</SectionLabel>
+            <ul style={{ fontFamily: bodyFont, fontSize: 14, color: T.ink, lineHeight: 1.8, margin: "10px 0 0", paddingLeft: 18 }}>
+              {data.results.map((r) => <li key={r}>{r}</li>)}
+            </ul>
+          </Card>
+          {data.theory.map((block) => (
+            <Card key={block.label} style={{ marginBottom: 16 }}>
+              <SectionLabel>{block.label}</SectionLabel>
+              <p style={{ fontFamily: bodyFont, fontSize: 15, color: T.ink, lineHeight: 1.6, marginTop: 8 }}>{block.text}</p>
+            </Card>
+          ))}
+          <Card style={{ marginBottom: 16, background: T.berrySoft, border: "none" }}>
+            <SectionLabel>Ограничения модели</SectionLabel>
+            <p style={{ fontFamily: bodyFont, fontSize: 13, color: T.ink, lineHeight: 1.6, marginTop: 8 }}>{data.limitations}</p>
+          </Card>
+          <Card style={{ marginBottom: 16 }}>
+            <SectionLabel>Термины</SectionLabel>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
+              {data.terms.map((t) => <TermRow key={t.term} term={t.term} def={t.def} />)}
+            </div>
+          </Card>
+          {data.comparison && (
+            <Card style={{ marginBottom: 16, overflowX: "auto" }}>
+              <SectionLabel>{data.comparison.title}</SectionLabel>
+              <table style={{ width: "100%", marginTop: 10, borderCollapse: "collapse", fontFamily: bodyFont, fontSize: 13 }}>
+                <tbody>
+                  {data.comparison.rows.map((row, ri) => (
+                    <tr key={ri} style={{ borderTop: `1px solid ${T.border}` }}>
+                      {row.map((cell, ci) => (
+                        <td key={ci} style={{ padding: "8px 10px", color: ci === 0 ? T.ink : T.inkSoft, fontWeight: ci === 0 ? 700 : 400, verticalAlign: "top" }}>{cell}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Card>
+          )}
+          <Card style={{ marginBottom: 16 }}>
+            <SectionLabel>Примеры</SectionLabel>
+            <div style={{ display: "flex", gap: 6, marginTop: 10, marginBottom: 12 }}>
+              {[["neutral", "Нейтральный"], ["b2b", "B2B"], ["personal", "BIOCARD"]].map(([k, l]) => (
+                <button key={k} onClick={() => setExampleTab(k)} style={{
+                  padding: "6px 12px", borderRadius: 8, border: `1px solid ${exampleTab === k ? T.ink : T.border}`,
+                  background: exampleTab === k ? T.ink : T.surface, color: exampleTab === k ? T.surface : T.inkSoft,
+                  fontFamily: bodyFont, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{l}</button>
+              ))}
+            </div>
+            <p style={{ fontFamily: bodyFont, fontSize: 14, color: T.ink, lineHeight: 1.6, margin: 0 }}>{data.examples[exampleTab]}</p>
+            {exampleTab === "personal" && (
+              <div style={{ marginTop: 8 }}><Pill tone="berry">Учебный смоделированный кейс</Pill></div>
+            )}
+          </Card>
+          <Card style={{ marginBottom: 16 }}>
+            <SectionLabel>Типичные ошибки</SectionLabel>
+            <ul style={{ fontFamily: bodyFont, fontSize: 14, color: T.inkSoft, lineHeight: 1.8, margin: "10px 0 0", paddingLeft: 18 }}>
+              {data.mistakes.map((m) => <li key={m}>{m}</li>)}
+            </ul>
+          </Card>
+          <Card style={{ marginBottom: 16 }}>
+            <SectionLabel>Мини-проверка (без оценки)</SectionLabel>
+            <p style={{ fontFamily: bodyFont, fontSize: 14, color: T.ink, lineHeight: 1.6, marginTop: 8 }}>{data.microcheck.q}</p>
+            {!showCheck ? (
+              <button onClick={() => setShowCheck(true)} style={{ ...ghostBtn, marginTop: 10 }}>Показать ответ</button>
+            ) : (
+              <p style={{ fontFamily: bodyFont, fontSize: 13, color: T.teal, lineHeight: 1.6, marginTop: 10 }}>{data.microcheck.a}</p>
+            )}
+          </Card>
+          <button onClick={() => setTab("practice")} style={primaryBtn}>К практике <ArrowRight size={15} /></button>
+        </div>
+      )}
+
+      {tab === "practice" && (
+        <div style={{ maxWidth: 660, display: "flex", flexDirection: "column", gap: 16 }}>
+          {[["micro", "Микроупражнение", data.practice.micro], ["main", "Основное задание", data.practice.main], ["advanced", "Задание повышенной сложности", data.practice.advanced]].map(([k, label, prompt]) => (
+            <Card key={k}>
+              <SectionLabel>{label}</SectionLabel>
+              <p style={{ fontFamily: bodyFont, fontSize: 14, color: T.ink, lineHeight: 1.6, margin: "8px 0 14px" }}>{prompt}</p>
+              <AIFeedbackBox task={prompt} context={userContext} saved={ps[k]} onSave={(v) => onPracticeSave(psKey, k, v)} />
+            </Card>
+          ))}
+          <button onClick={() => setTab("test")} style={primaryBtn}>К тесту <ArrowRight size={15} /></button>
+        </div>
+      )}
+
+      {tab === "test" && q && (
+        <div style={{ maxWidth: 660 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <SectionLabel>Вопрос {quizIdx + 1} из {quiz.length}</SectionLabel>
+            <Pill tone="indigo">{q.type === "multi" ? "Несколько ответов" : "Один ответ"}</Pill>
+          </div>
+          <Card>
+            <p style={{ fontFamily: bodyFont, fontSize: 16, fontWeight: 500, color: T.ink, lineHeight: 1.5, margin: "0 0 18px" }}>{q.q}</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {orderedOptions.map((opt, i) => {
+                const optId = q.order[i];
+                const isSel = selected === optId;
+                const isRight = checked && opt.correct;
+                const isWrong = checked && isSel && !opt.correct;
+                return (
+                  <button key={i} onClick={() => !checked && setSelected(optId)} style={{
+                    textAlign: "left", padding: "13px 16px", borderRadius: 10, cursor: checked ? "default" : "pointer",
+                    border: `1.5px solid ${isRight ? T.teal : isWrong ? T.berry : isSel ? T.ink : T.border}`,
+                    background: isRight ? T.tealSoft : isWrong ? T.berrySoft : isSel ? T.surfaceSoft : T.surface,
+                    fontFamily: bodyFont, fontSize: 14, color: T.ink, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    {opt.t}{isRight && <CheckCircle2 size={16} color={T.teal} />}{isWrong && <X size={16} color={T.berry} />}
+                  </button>
+                );
+              })}
+            </div>
+            {checked && (
+              <div style={{ marginTop: 16, padding: 14, borderRadius: 10, background: T.surfaceSoft }}>
+                <div style={{ fontFamily: bodyFont, fontSize: 12, fontWeight: 700, color: q.options[selected].correct ? T.teal : T.berry, marginBottom: 4 }}>
+                  {q.options[selected].correct ? "Верно" : "Неверно"}
+                </div>
+                <p style={{ fontFamily: bodyFont, fontSize: 13, color: T.inkSoft, lineHeight: 1.5, margin: 0 }}>{q.explain}</p>
+              </div>
+            )}
+            <div style={{ marginTop: 18 }}>
+              {!checked ? (
+                <button onClick={submitAnswer} disabled={selected === null} style={{ ...primaryBtn, marginTop: 0, opacity: selected === null ? 0.4 : 1 }}>Ответить</button>
+              ) : (
+                <button onClick={nextQuestion} style={{ ...primaryBtn, marginTop: 0 }}>{quizIdx < quiz.length - 1 ? "Следующий вопрос" : "К итогам урока"} <ArrowRight size={15} /></button>
+              )}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {tab === "wrap" && (
+        <div style={{ maxWidth: 560, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 24 }}>
+            <div style={{ width: 64, height: 64, borderRadius: "50%", background: T.goldSoft, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
+              <Trophy size={28} color="#8A5B12" />
+            </div>
+            <h2 style={{ fontFamily: displayFont, fontSize: 26, fontWeight: 600, color: T.ink, margin: "0 0 8px" }}>Урок пройден</h2>
+            <p style={{ fontFamily: bodyFont, fontSize: 15, color: T.inkSoft }}>Тест: <b style={{ color: T.ink }}>{score} из {quiz.length}</b></p>
+          </div>
+          <Card style={{ marginBottom: 16 }}>
+            <SectionLabel>Резюме урока</SectionLabel>
+            <ul style={{ fontFamily: bodyFont, fontSize: 14, color: T.ink, lineHeight: 1.8, margin: "10px 0 0", paddingLeft: 18 }}>
+              {data.summary.map((s) => <li key={s}>{s}</li>)}
+            </ul>
+          </Card>
+          <Card style={{ marginBottom: 16 }}>
+            <SectionLabel>Источники</SectionLabel>
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontFamily: bodyFont, fontSize: 12, fontWeight: 700, color: T.inkFaint, marginBottom: 4 }}>ОБЯЗАТЕЛЬНЫЕ</div>
+              <ul style={{ fontFamily: bodyFont, fontSize: 13, color: T.inkSoft, lineHeight: 1.7, margin: "0 0 10px", paddingLeft: 18 }}>
+                {data.sources.required.map((s) => <li key={s}>{s}</li>)}
+              </ul>
+              <div style={{ fontFamily: bodyFont, fontSize: 12, fontWeight: 700, color: T.inkFaint, marginBottom: 4 }}>ДОПОЛНИТЕЛЬНЫЕ</div>
+              <ul style={{ fontFamily: bodyFont, fontSize: 13, color: T.inkSoft, lineHeight: 1.7, margin: 0, paddingLeft: 18 }}>
+                {data.sources.additional.map((s) => <li key={s}>{s}</li>)}
+              </ul>
+            </div>
+          </Card>
+          <Card style={{ marginBottom: 20 }}>
+            <SectionLabel>Рефлексия</SectionLabel>
+            <p style={{ fontFamily: bodyFont, fontSize: 13, color: T.inkSoft, marginTop: 8, marginBottom: 10 }}>{data.reflection}</p>
+            <textarea value={reflection} onChange={(e) => setReflection(e.target.value)} placeholder="Пара предложений — сохранится в заметках личного кабинета"
+              style={{ width: "100%", minHeight: 70, padding: 12, borderRadius: 10, border: `1px solid ${T.border}`,
+                fontFamily: bodyFont, fontSize: 13, color: T.ink, resize: "vertical", boxSizing: "border-box" }} />
+          </Card>
+          <button onClick={() => onComplete(lessonId, score, quiz.length, reflection)} style={{ ...primaryBtn, width: "100%", justifyContent: "center" }}>
+            {nextLabel} <ArrowRight size={15} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+   ОБЗОР МОДУЛЯ 1 — статусы уроков считаются из диагностики
+   ============================================================ */
+
+function lessonStatus(lessonId, completedCount, competencies) {
+  if (lessonId <= completedCount) return { label: "Пройден", tone: "teal" };
+  if (lessonId > completedCount + 1) return { label: "Заблокирован", tone: "neutral" };
+  // следующий доступный урок — смотрим, есть ли сильное подтверждённое владение по смежным темам
+  const relevant = lessonId <= 2 ? competencies.find((c) => c.key === (lessonId === 1 ? "terms" : "concepts")) : null;
+  if (relevant && relevant.level === "продвинутый" && relevant.evidence >= 2) return { label: "Контрольное прохождение", tone: "gold" };
+  if (relevant && (relevant.level === "начальный" || relevant.level === "недостаточно данных")) return { label: "Обязательный полный", tone: "indigo" };
+  return { label: "Обязательный полный", tone: "indigo" };
+}
+
+function ModuleOverview({ completedCount, competencies, onOpenLesson }) {
+  return (
+    <div>
+      <PageHeader eyebrow="Модуль 01 · 8 уроков · 15–25 ак. часов" title="Основы современного маркетинга" />
+      <p style={{ fontFamily: bodyFont, fontSize: 14, color: T.inkFaint, marginBottom: 24, maxWidth: 580 }}>
+        Программа модуля утверждена и состоит из восьми уроков. Полностью раскрыты уроки 1–2 — остальные показаны
+        как содержательный анонс с результатами обучения и откроются в следующих итерациях.
+      </p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 640 }}>
+        {MODULE1_LESSON_META.map((l) => {
+          const status = lessonStatus(l.id, completedCount, competencies);
+          const unlocked = l.id <= completedCount + 1;
+          const clickable = unlocked && l.built;
+          return (
+            <Card key={l.id} onClick={clickable ? () => onOpenLesson(l.id) : undefined} style={{
+              display: "flex", alignItems: "center", gap: 14, opacity: unlocked ? 1 : 0.55,
+              borderColor: clickable ? T.ink : T.border }}>
+              <div style={{ width: 36, height: 36, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                background: status.label === "Пройден" ? T.tealSoft : clickable ? T.goldSoft : T.surfaceSoft,
+                color: status.label === "Пройден" ? T.teal : clickable ? "#8A5B12" : T.inkFaint }}>
+                {status.label === "Пройден" ? <CheckCircle2 size={17} /> : unlocked ? <BookOpen size={16} /> : <Lock size={14} />}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <div style={{ fontFamily: bodyFont, fontSize: 14, fontWeight: 600, color: T.ink }}>Урок {l.id}. {l.title}</div>
+                  <Pill tone={status.tone}>{status.label}</Pill>
+                  {!l.built && <Pill tone="neutral">Анонс</Pill>}
+                </div>
+                <div style={{ fontFamily: bodyFont, fontSize: 12, color: T.inkFaint, marginTop: 4 }}>{l.question}</div>
+                <div style={{ fontFamily: bodyFont, fontSize: 12, color: T.inkFaint, marginTop: 2 }}>{l.duration}</div>
+                {!l.built && l.results && (
+                  <ul style={{ fontFamily: bodyFont, fontSize: 12, color: T.inkFaint, margin: "6px 0 0", paddingLeft: 16, lineHeight: 1.6 }}>
+                    {l.results.map((o) => <li key={o}>{o}</li>)}
+                  </ul>
+                )}
+              </div>
+              {clickable && <ChevronRight size={17} color={T.inkFaint} />}
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   ГЛАВНЫЙ ЭКРАН — только реальные показатели
+   ============================================================ */
+
+function Dashboard({ state, onGoLesson }) {
+  const { profile, completedLessons, points, streak, competencies } = state;
+  const percent = Math.round((completedLessons / 8) * 100);
+  const nextLessonId = Math.min(completedLessons + 1, 8);
+  const nextMeta = MODULE1_LESSON_META.find((l) => l.id === nextLessonId);
+  const weakest = competencies ? [...competencies].sort((a, b) => (a.correct / (a.evidence || 1)) - (b.correct / (b.evidence || 1)))[0] : null;
+
+  return (
+    <div>
+      <PageHeader eyebrow={`С возвращением, ${profile.preferredName || "коллега"}`} title="Главный экран" />
+      <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 20, marginBottom: 20 }}>
+        <Card style={{ background: T.ink, color: T.surface, border: "none" }}>
+          <Pill tone="gold">Модуль 01 · Урок {nextLessonId} из 8</Pill>
+          <h3 style={{ fontFamily: displayFont, fontSize: 26, fontWeight: 600, margin: "14px 0 8px" }}>
+            {nextMeta ? nextMeta.title : "Модуль пройден"}
+          </h3>
+          <p style={{ fontFamily: bodyFont, fontSize: 14, color: "#B9BEDA", maxWidth: 380, lineHeight: 1.5 }}>
+            {nextMeta && !nextMeta.built ? "Этот урок пока анонс — следующий полностью раскрытый доступен в обзоре модуля." : nextMeta ? nextMeta.question : "Загляните в личный кабинет за портфолио."}
+          </p>
+          {nextMeta && nextMeta.built && (
+            <button onClick={() => onGoLesson(nextLessonId)} style={{ display: "inline-flex", alignItems: "center", gap: 8, marginTop: 20,
+              padding: "12px 20px", borderRadius: 10, border: "none", cursor: "pointer", background: T.gold, color: T.ink,
+              fontFamily: bodyFont, fontSize: 14, fontWeight: 700 }}>Продолжить обучение <ArrowRight size={15} /></button>
+          )}
+        </Card>
+        <Card style={{ display: "flex", alignItems: "center", gap: 20 }}>
+          <ProgressRing percent={percent} />
+          <div>
+            <div style={{ fontFamily: monoFont, fontSize: 28, fontWeight: 600, color: T.ink }}>{percent}%</div>
+            <div style={{ fontFamily: bodyFont, fontSize: 13, color: T.inkFaint }}>модуля 1 пройдено</div>
+            <div style={{ fontFamily: bodyFont, fontSize: 13, color: T.inkFaint, marginTop: 4 }}>{completedLessons} из 8 уроков завершено</div>
+          </div>
+        </Card>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 20 }}>
+        <StatCard icon={Flame} tone="berry" value={String(streak)} label="дней подряд" />
+        <StatCard icon={Star} tone="gold" value={String(points)} label="баллов за реальные действия" />
+        <StatCard icon={Trophy} tone="indigo" value="0" label="сертификатов" />
+        <StatCard icon={Target} tone="teal" value={completedLessons >= 8 ? "Готово" : `Урок ${nextLessonId}`} label="ближайшая цель" />
+      </div>
+
+      <Card>
+        <SectionLabel>Персональная рекомендация</SectionLabel>
+        {weakest && weakest.evidence > 0 ? (
+          <p style={{ fontFamily: bodyFont, fontSize: 14, color: T.ink, lineHeight: 1.6, marginTop: 10 }}>
+            В диагностике слабее всего подтвердилась тема «{weakest.label}» ({weakest.correct} из {weakest.evidence} верно).
+            Рекомендуем не спешить с этой темой в уроках модуля и вернуться к её примерам ещё раз.
+          </p>
+        ) : (
+          <p style={{ fontFamily: bodyFont, fontSize: 14, color: T.inkFaint, lineHeight: 1.6, marginTop: 10 }}>
+            Диагностика ещё не пройдена — рекомендации появятся после неё.
+          </p>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function StatCard({ icon: Icon, tone, value, label }) {
+  const tones = { gold: T.gold, teal: T.teal, berry: T.berry, indigo: T.indigo };
+  return (
+    <Card style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <div style={{ width: 38, height: 38, borderRadius: 10, background: `${tones[tone]}1A`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <Icon size={18} color={tones[tone]} />
+      </div>
+      <div>
+        <div style={{ fontFamily: monoFont, fontSize: 18, fontWeight: 600, color: T.ink, lineHeight: 1.1 }}>{value}</div>
+        <div style={{ fontFamily: bodyFont, fontSize: 12, color: T.inkFaint, marginTop: 2 }}>{label}</div>
+      </div>
+    </Card>
+  );
+}
+
+/* ============================================================
+   КАРТА КУРСА (17 модулей) — без изменений в идее, дизайн сохранён
+   ============================================================ */
+
+const MODULES = [
+  { id: 1, title: "Основы современного маркетинга", level: "Базовый", duration: "15–25 ч", lessons: 8 },
+  { id: 2, title: "Исследование аудитории", level: "Базовый", duration: "4 ч", lessons: 7 },
+  { id: 3, title: "Анализ рынка и конкурентов", level: "Базовый", duration: "3 ч", lessons: 6 },
+  { id: 4, title: "Стратегия и позиционирование", level: "Средний", duration: "4 ч", lessons: 7 },
+  { id: 5, title: "Бренд и Tone of Voice", level: "Средний", duration: "3 ч", lessons: 6 },
+  { id: 6, title: "Контент-стратегия", level: "Средний", duration: "4 ч", lessons: 7 },
+  { id: 7, title: "Копирайтинг и редактура", level: "Средний", duration: "5 ч", lessons: 8 },
+  { id: 8, title: "SMM", level: "Средний", duration: "5 ч", lessons: 8 },
+  { id: 9, title: "Видеоконтент", level: "Продвинутый", duration: "4 ч", lessons: 7 },
+  { id: 10, title: "Внутренние коммуникации", level: "Средний", duration: "4 ч", lessons: 7 },
+  { id: 11, title: "HR-бренд", level: "Продвинутый", duration: "4 ч", lessons: 6 },
+  { id: 12, title: "PR и репутация", level: "Продвинутый", duration: "3 ч", lessons: 6 },
+  { id: 13, title: "Реклама и продвижение", level: "Продвинутый", duration: "5 ч", lessons: 8 },
+  { id: 14, title: "Аналитика", level: "Продвинутый", duration: "4 ч", lessons: 7 },
+  { id: 15, title: "ИИ в маркетинге", level: "Продвинутый", duration: "3 ч", lessons: 6 },
+  { id: 16, title: "Управление проектами", level: "Продвинутый", duration: "3 ч", lessons: 6 },
+  { id: 17, title: "Дипломный проект", level: "Экспертный", duration: "8 ч", lessons: 1 },
+];
+
+function CourseMap({ completedLessons, onOpenModule1 }) {
+  const [preview, setPreview] = useState(null);
+  const rowH = 108;
+  const svgH = MODULES.length * rowH + 40;
+  const points = MODULES.map((m, i) => ({ ...m, x: i % 2 === 0 ? 90 : 380, y: 40 + i * rowH }));
+  const pathD = points.map((p, i) => (i === 0 ? `M ${p.x} ${p.y}` : `Q ${p.x < points[i - 1].x ? p.x + 140 : p.x - 140} ${(p.y + points[i - 1].y) / 2}, ${p.x} ${p.y}`)).join(" ");
+  const diplomaBlocked = completedLessons < 8;
+
+  return (
+    <div>
+      <PageHeader eyebrow="17 модулей · фундамент открывается последовательно" title="Карта обучения" />
+      <div style={{ position: "relative", maxWidth: 620 }}>
+        <svg width="100%" height={svgH} viewBox={`0 0 470 ${svgH}`} style={{ position: "absolute", top: 0, left: 0 }}>
+          <path d={pathD} stroke={T.border} strokeWidth={3} fill="none" strokeDasharray="1 10" strokeLinecap="round" />
+        </svg>
+        <div style={{ position: "relative" }}>
+          {points.map((m, i) => {
+            const isDiploma = m.id === 17;
+            const unlocked = isFirst;
+            const isLeft = i % 2 === 0;
+            return (
+              <div key={m.id} style={{ position: "relative", height: rowH, display: "flex", justifyContent: isLeft ? "flex-start" : "flex-end" }}>
+                <div onClick={() => setPreview(m)} style={{
+                  width: 40, height: 40, borderRadius: "50%", flexShrink: 0, cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  background: unlocked ? T.gold : T.surface, border: `2px solid ${unlocked ? T.gold : T.border}`,
+                  color: unlocked ? T.ink : T.inkFaint, marginLeft: isLeft ? 70 : 0, marginRight: isLeft ? 0 : 70,
+                  boxShadow: unlocked ? "0 4px 14px rgba(231,163,62,0.35)" : "none" }}>
+                  {isDiploma ? <Trophy size={16} /> : unlocked ? <BookOpen size={16} /> : <Lock size={14} />}
+                </div>
+                <div onClick={() => setPreview(m)} style={{ position: "absolute", top: 0, left: isLeft ? 126 : "auto", right: isLeft ? "auto" : 126, width: 230, cursor: "pointer" }}>
+                  <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "12px 14px" }}>
+                    <div style={{ fontFamily: monoFont, fontSize: 11, color: T.inkFaint, marginBottom: 4 }}>МОДУЛЬ {String(m.id).padStart(2, "0")} · {m.level}</div>
+                    <div style={{ fontFamily: bodyFont, fontSize: 14, fontWeight: 600, color: T.ink, lineHeight: 1.3 }}>{m.title}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      {preview && (
+        <ModulePreviewModal module={preview} unlocked={preview.id === 1} diplomaBlocked={preview.id === 17 && diplomaBlocked}
+          onClose={() => setPreview(null)} onStart={() => { setPreview(null); onOpenModule1(); }} />
+      )}
+    </div>
+  );
+}
+
+function ModulePreviewModal({ module, unlocked, diplomaBlocked, onClose, onStart }) {
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(22,26,46,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 20 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: T.surface, borderRadius: 20, padding: 28, width: "100%", maxWidth: 420 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <Pill tone={unlocked ? "gold" : "neutral"}>{unlocked ? "Доступен" : diplomaBlocked ? "Требует всех модулей" : "Заблокирован"}</Pill>
+          <button onClick={onClose} style={{ border: "none", background: "none", cursor: "pointer", color: T.inkFaint }}><X size={18} /></button>
+        </div>
+        <div style={{ fontFamily: monoFont, fontSize: 12, color: T.inkFaint, margin: "14px 0 4px" }}>МОДУЛЬ {String(module.id).padStart(2, "0")}</div>
+        <h3 style={{ fontFamily: displayFont, fontSize: 22, fontWeight: 600, color: T.ink, margin: "0 0 10px" }}>{module.title}</h3>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 18 }}>
+          <MetaRow label="Уровень" value={module.level} />
+          <MetaRow label="Длительность" value={module.duration} />
+          <MetaRow label="Уроков" value={module.lessons} />
+        </div>
+        {unlocked ? (
+          <button onClick={onStart} style={{ ...primaryBtn, marginTop: 0, width: "100%", justifyContent: "center" }}>Открыть модуль <ArrowRight size={15} /></button>
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, color: T.inkFaint, fontFamily: bodyFont, fontSize: 13 }}>
+            <Lock size={14} /> {diplomaBlocked ? "Диплом остаётся заблокированным до выполнения обязательных требований" : "Фундаментальные модули открываются последовательно"}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   ЛИЧНЫЙ КАБИНЕТ
+   ============================================================ */
+
+function Cabinet({ state, onUpdateProfile, onUpdateNotes }) {
+  const { profile, competencies, notes, history } = state;
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(profile);
+  const sorted = competencies ? [...competencies].sort((a, b) => (b.correct / (b.evidence || 1)) - (a.correct / (a.evidence || 1))) : [];
+
+  return (
+    <div>
+      <PageHeader eyebrow="Личный кабинет" title="Профиль и карта компетенций" />
+      <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 20 }}>
+        <div>
+          <Card style={{ marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <SectionLabel>Компетенции · уровень, а не выдуманный процент</SectionLabel>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 14 }}>
+              {sorted.map((c) => (
+                <div key={c.key} style={{ paddingBottom: 12, borderBottom: `1px solid ${T.border}` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                    <span style={{ fontFamily: bodyFont, fontSize: 13, fontWeight: 600, color: T.ink }}>{c.label}</span>
+                    <Pill tone={c.level === "недостаточно данных" ? "neutral" : c.level === "начальный" ? "berry" : c.level === "базовый" ? "gold" : "teal"}>{c.level}</Pill>
+                  </div>
+                  <div style={{ fontFamily: bodyFont, fontSize: 12, color: T.inkFaint }}>
+                    {c.evidence} заданий · уверенность: {c.confidence} · последняя проверка: {c.lastChecked}
+                  </div>
+                  {c.wrongTopics.length > 0 && (
+                    <div style={{ fontFamily: bodyFont, fontSize: 12, color: T.berry, marginTop: 4 }}>
+                      Ошибка в: {c.wrongTopics[0]}
+                    </div>
+                  )}
+                </div>
+              ))}
+              {sorted.length === 0 && <p style={{ fontFamily: bodyFont, fontSize: 13, color: T.inkFaint }}>Пройдите диагностику, чтобы увидеть карту.</p>}
+            </div>
+          </Card>
+
+          <Card>
+            <SectionLabel>Заметки</SectionLabel>
+            <textarea value={notes || ""} onChange={(e) => onUpdateNotes(e.target.value)} placeholder="Свободные заметки — сохраняются автоматически"
+              style={{ width: "100%", minHeight: 90, marginTop: 10, padding: 12, borderRadius: 10, border: `1px solid ${T.border}`,
+                fontFamily: bodyFont, fontSize: 13, color: T.ink, resize: "vertical", boxSizing: "border-box" }} />
+          </Card>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          <Card>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <SectionLabel>Профиль</SectionLabel>
+              <button onClick={() => { setEditing(!editing); setDraft(profile); }} style={ghostBtn}>{editing ? "Отмена" : "Редактировать"}</button>
+            </div>
+            {!editing ? (
+              <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+                <MetaRow label="Обращение" value={profile.preferredName || "—"} />
+                <MetaRow label="Должность" value={profile.position || "—"} />
+                <MetaRow label="Компания / сфера" value={`${profile.company} · ${profile.sphere}`} />
+                <MetaRow label="Стаж" value={profile.experience || "—"} />
+                <MetaRow label="Самостоятельность" value={profile.autonomy || "—"} />
+                <MetaRow label="Время в неделю" value={profile.weeklyTime || "—"} />
+                <MetaRow label="Приоритет на 3 месяца" value={profile.priority || "—"} />
+              </div>
+            ) : (
+              <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+                {["preferredName", "position", "priority"].map((k) => (
+                  <input key={k} value={draft[k] || ""} onChange={(e) => setDraft({ ...draft, [k]: e.target.value })}
+                    style={{ padding: "10px 12px", borderRadius: 8, border: `1px solid ${T.border}`, fontFamily: bodyFont, fontSize: 13 }} />
+                ))}
+                <button onClick={() => { onUpdateProfile(draft); setEditing(false); }} style={{ ...primaryBtn, marginTop: 4 }}>Сохранить</button>
+              </div>
+            )}
+          </Card>
+          <Card>
+            <SectionLabel>Достижения</SectionLabel>
+            <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+              <Badge icon={Target} label="Диагностика пройдена" earned={!!competencies} />
+              <Badge icon={Sparkles} label="Первый урок завершён" earned={state.completedLessons >= 1} />
+              <Badge icon={Trophy} label="Модуль 1 завершён" earned={state.completedLessons >= 8} />
+            </div>
+          </Card>
+          <Card>
+            <SectionLabel>История</SectionLabel>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
+              {(history || []).slice().reverse().slice(0, 6).map((h, i) => (
+                <div key={i} style={{ fontFamily: bodyFont, fontSize: 12, color: T.inkSoft }}>{h.date} · {h.text}</div>
+              ))}
+              {(!history || history.length === 0) && <p style={{ fontFamily: bodyFont, fontSize: 12, color: T.inkFaint }}>Пока пусто</p>}
+            </div>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Badge({ icon: Icon, label, earned }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 10, background: earned ? T.goldSoft : T.surfaceSoft, opacity: earned ? 1 : 0.5 }}>
+      <Icon size={15} color={earned ? "#8A5B12" : T.inkFaint} />
+      <span style={{ fontFamily: bodyFont, fontSize: 12, fontWeight: 600, color: earned ? "#8A5B12" : T.inkFaint }}>{label}</span>
+    </div>
+  );
+}
+
+/* ============================================================
+   ПОРТФОЛИО — итоговая работа модуля 1 с версиями и ИИ-проверкой
+   ============================================================ */
+
+const FINAL_WORK_SPEC = {
+  title: "Анализ маркетинга выбранной компании как системы создания и передачи ценности",
+  parts: [
+    "Описание компании и рынка", "Основного клиента или группы клиентов", "Создаваемую ценность",
+    "Потребность, желание и спрос", "Текущую маркетинговую концепцию",
+    "Связь маркетинга с продуктом, продажами, сервисом и другими функциями",
+    "Признаки сведения маркетинга только к продвижению", "Предложения по улучшению",
+    "Ограничения анализа и недостающие данные",
+  ],
+};
+
+function Portfolio({ state, onSaveWork, userContext }) {
+  const work = state.portfolio.module1FinalWork || { v1: "", feedback1: null, v2: "", feedback2: null };
+  const [v1, setV1] = useState(work.v1);
+  const [v2, setV2] = useState(work.v2);
+  const [loading1, setLoading1] = useState(false);
+  const [loading2, setLoading2] = useState(false);
+
+  async function checkV1() {
+    setLoading1(true);
+    const res = await callAIMentor({ task: FINAL_WORK_SPEC.title + ": " + FINAL_WORK_SPEC.parts.join("; "), answer: v1, context: userContext });
+    onSaveWork({ ...work, v1, feedback1: res.text });
+    setLoading1(false);
+  }
+  async function checkV2() {
+    setLoading2(true);
+    const res = await callAIMentor({ task: "Улучшенная версия того же анализа с учётом обратной связи: " + FINAL_WORK_SPEC.title, answer: v2, context: userContext });
+    onSaveWork({ ...work, v2, feedback2: res.text });
+    setLoading2(false);
+  }
+
+  return (
+    <div>
+      <PageHeader eyebrow="Портфолио" title="Итоговая работа модуля 1" />
+      <Card style={{ marginBottom: 20, maxWidth: 700 }}>
+        <SectionLabel>{FINAL_WORK_SPEC.title}</SectionLabel>
+        <ul style={{ fontFamily: bodyFont, fontSize: 13, color: T.inkSoft, lineHeight: 1.8, margin: "10px 0 0", paddingLeft: 18 }}>
+          {FINAL_WORK_SPEC.parts.map((p) => <li key={p}>{p}</li>)}
+        </ul>
+      </Card>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, maxWidth: 900 }}>
+        <Card>
+          <SectionLabel>Версия 1</SectionLabel>
+          <textarea value={v1} onChange={(e) => { setV1(e.target.value); onSaveWork({ ...work, v1: e.target.value }); }}
+            placeholder="Черновик анализа…" style={{ width: "100%", minHeight: 220, marginTop: 10, padding: 12, borderRadius: 10,
+              border: `1px solid ${T.border}`, fontFamily: bodyFont, fontSize: 13, color: T.ink, resize: "vertical", boxSizing: "border-box" }} />
+          <button onClick={checkV1} disabled={!v1.trim() || loading1} style={{ ...ghostBtn, marginTop: 10, opacity: !v1.trim() || loading1 ? 0.5 : 1 }}>
+            {loading1 ? "Проверяю…" : "Отправить на проверку"}
+          </button>
+          {work.feedback1 && <p style={{ fontFamily: bodyFont, fontSize: 12, color: T.inkSoft, marginTop: 10, whiteSpace: "pre-wrap" }}>{work.feedback1}</p>}
+        </Card>
+        <Card>
+          <SectionLabel>Версия 2 (улучшенная)</SectionLabel>
+          <textarea value={v2} onChange={(e) => { setV2(e.target.value); onSaveWork({ ...work, v2: e.target.value }); }}
+            placeholder="Перепишите с учётом обратной связи…" style={{ width: "100%", minHeight: 220, marginTop: 10, padding: 12, borderRadius: 10,
+              border: `1px solid ${T.border}`, fontFamily: bodyFont, fontSize: 13, color: T.ink, resize: "vertical", boxSizing: "border-box" }} />
+          <button onClick={checkV2} disabled={!v2.trim() || loading2} style={{ ...ghostBtn, marginTop: 10, opacity: !v2.trim() || loading2 ? 0.5 : 1 }}>
+            {loading2 ? "Проверяю…" : "Отправить на проверку"}
+          </button>
+          {work.feedback2 && <p style={{ fontFamily: bodyFont, fontSize: 12, color: T.inkSoft, marginTop: 10, whiteSpace: "pre-wrap" }}>{work.feedback2}</p>}
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   БИБЛИОТЕКА — категории + поиск
+   ============================================================ */
+
+function buildLibraryItems() {
+  const items = [];
+  [1, 2].forEach((id) => {
+    const d = LESSON_CONTENT[id];
+    d.terms.forEach((t) => items.push({ cat: "Словарь", title: t.term, body: t.def }));
+    items.push({ cat: "Источники", title: `Урок ${id}: обязательные`, body: d.sources.required.join("; ") });
+    items.push({ cat: "Источники", title: `Урок ${id}: дополнительные`, body: d.sources.additional.join("; ") });
+  });
+  items.push({ cat: "Шаблоны", title: "Бриф на контент", body: "Цель публикации:\nАудитория:\nГлавное сообщение:\nФормат и площадка:\nCTA:\nДедлайн:\nМетрика успеха:" });
+  items.push({ cat: "Шаблоны", title: "Структура контент-плана", body: "Дата | Площадка | Рубрика | Тема | Формат | Цель | Ответственный | Статус" });
+  items.push({ cat: "Чек-листы", title: "Чек-лист поста перед публикацией", body: "☐ Соответствует Tone of Voice\n☐ Есть чёткий CTA\n☐ Заголовок цепляет за 3 секунды\n☐ Нет канцелярита\n☐ Факты проверены" });
+  return items;
+}
+
+function LibraryScreen({ notes }) {
+  const [cat, setCat] = useState("Все");
+  const [query, setQuery] = useState("");
+  const [copied, setCopied] = useState(null);
+  const items = useMemo(() => buildLibraryItems(), []);
+  const cats = ["Все", "Словарь", "Шаблоны", "Чек-листы", "Источники", "Заметки"];
+
+  const withNotes = notes ? [...items, { cat: "Заметки", title: "Мои заметки", body: notes }] : items;
+  const filtered = withNotes.filter((i) => (cat === "Все" || i.cat === cat) && (query === "" || (i.title + i.body).toLowerCase().includes(query.toLowerCase())));
+
+  function copy(t) { navigator.clipboard?.writeText(t.body).catch(() => {}); setCopied(t.title); setTimeout(() => setCopied(null), 1500); }
+
+  return (
+    <div>
+      <PageHeader eyebrow="Библиотека" title="Материалы и источники" />
+      <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+        {cats.map((c) => (
+          <button key={c} onClick={() => setCat(c)} style={{ padding: "6px 12px", borderRadius: 8, border: `1px solid ${cat === c ? T.ink : T.border}`,
+            background: cat === c ? T.ink : T.surface, color: cat === c ? T.surface : T.inkSoft, fontFamily: bodyFont, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{c}</button>
+        ))}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, maxWidth: 320 }}>
+        <Search size={15} color={T.inkFaint} />
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Поиск по библиотеке…"
+          style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontFamily: bodyFont, fontSize: 13, borderBottom: `1px solid ${T.border}`, padding: "4px 0" }} />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+        {filtered.map((t) => (
+          <Card key={t.cat + t.title}>
+            <Pill tone="indigo">{t.cat}</Pill>
+            <h3 style={{ fontFamily: bodyFont, fontSize: 14, fontWeight: 700, color: T.ink, margin: "12px 0 10px" }}>{t.title}</h3>
+            <pre style={{ fontFamily: monoFont, fontSize: 11.5, color: T.inkSoft, background: T.surfaceSoft, padding: 12, borderRadius: 8,
+              whiteSpace: "pre-wrap", lineHeight: 1.6, margin: "0 0 12px", maxHeight: 140, overflow: "auto" }}>{t.body}</pre>
+            <button onClick={() => copy(t)} style={ghostBtn}>{copied === t.title ? <Check size={13} color={T.teal} /> : <Copy size={13} />} {copied === t.title ? "Скопировано" : "Скопировать"}</button>
+          </Card>
+        ))}
+        {filtered.length === 0 && <p style={{ fontFamily: bodyFont, fontSize: 13, color: T.inkFaint }}>Ничего не найдено</p>}
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   КОРНЕВОЕ ПРИЛОЖЕНИЕ
+   ============================================================ */
+
+const DEFAULT_STATE = {
+  profile: null, competencies: null, rawDiag: null,
+  completedLessons: 0, points: 0, streak: 0, lastActive: null,
+  practiceStore: {}, portfolio: {}, notes: "", history: [],
+};
+
+export default function App() {
+  const [loaded, setLoaded] = useState(false);
+  const [state, setState] = useState(DEFAULT_STATE);
+  const [screen, setScreen] = useState("dashboard");
+  const [stage, setStage] = useState("boot"); // boot | onboarding | diagnostic | app
+
+  useEffect(() => {
+    (() => {
+      const s = loadState();
+      if (s && s.profile && s.competencies) {
+        const today = new Date().toISOString().slice(0, 10);
+        let streak = s.streak || 0;
+        if (s.lastActive) {
+          const diffDays = Math.round((new Date(today) - new Date(s.lastActive)) / 86400000);
+          if (diffDays === 1) streak += 1; else if (diffDays > 1) streak = 1;
+        } else streak = 1;
+        setState({ ...DEFAULT_STATE, ...s, streak, lastActive: today });
+        setStage("app");
+      } else if (s && s.profile && !s.competencies) {
+        setState({ ...DEFAULT_STATE, ...s });
+        setStage("diagnostic");
+      } else {
+        setStage("onboarding");
+      }
+      setLoaded(true);
+    })();
+  }, []);
+
+  useEffect(() => { if (loaded) saveState(state); }, [state, loaded]);
+
+  function pushHistory(text) {
+    const today = new Date().toISOString().slice(0, 10);
+    setState((s) => ({ ...s, history: [...(s.history || []), { date: today, text }] }));
+  }
+
+  function handleOnboardFinish(profile) {
+    setState((s) => ({ ...s, profile }));
+    setStage("diagnostic");
+  }
+  function handleDiagnosticComplete({ competencies, rawDiag }) {
+    setState((s) => ({ ...s, competencies, rawDiag, points: s.points + 20 }));
+    pushHistory("Пройдена входная диагностика");
+    setStage("app");
+    setScreen("dashboard");
+  }
+  function handleLessonComplete(lessonId, score, total) {
+    setState((s) => ({
+      ...s,
+      completedLessons: Math.max(s.completedLessons, lessonId),
+      points: s.points + 30 + score * 5,
+    }));
+    pushHistory(`Завершён урок ${lessonId} (тест ${score}/${total})`);
+    setScreen("moduleOverview");
+  }
+  function handlePracticeSave(lessonKey, level, value) {
+    setState((s) => ({ ...s, practiceStore: { ...s.practiceStore, [lessonKey]: { ...(s.practiceStore[lessonKey] || {}), [level]: value } } }));
+  }
+  function handlePortfolioSave(work) {
+    setState((s) => ({ ...s, portfolio: { ...s.portfolio, module1FinalWork: work } }));
+  }
+
+  const userContext = state.profile ? `${state.profile.position || "специалист по коммуникациям"} в ${state.profile.company}, сфера — ${state.profile.sphere}. Ключевые направления: ${(state.profile.directions || []).join(", ")}.` : "";
+
+  if (!loaded || stage === "boot") {
+    return (
+      <div style={{ minHeight: "100vh", background: T.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <style>{FONTS}</style>
+        <Loader2 size={22} color={T.inkFaint} />
+      </div>
+    );
+  }
+
+  if (stage === "onboarding") {
+    return <div style={{ fontFamily: bodyFont }}><style>{FONTS}</style><Onboarding onFinish={handleOnboardFinish} /></div>;
+  }
+  if (stage === "diagnostic") {
+    return <div style={{ fontFamily: bodyFont }}><style>{FONTS}</style><Onboard_Diagnostic_Flow onComplete={handleDiagnosticComplete} /></div>;
+  }
+
+  const nav = [
+    { key: "dashboard", label: "Главный экран", icon: LayoutGrid },
+    { key: "map", label: "Карта курса", icon: BookOpen },
+    { key: "moduleOverview", label: "Модуль 1", icon: FileText },
+    { key: "portfolio", label: "Портфолио", icon: Trophy },
+    { key: "cabinet", label: "Личный кабинет", icon: User },
+    { key: "library", label: "Библиотека", icon: Library },
+  ];
+
+  return (
+    <div style={{ fontFamily: bodyFont, background: T.bg, minHeight: "100vh", display: "flex" }}>
+      <style>{FONTS}</style>
+      <aside style={{ width: 230, borderRight: `1px solid ${T.border}`, padding: 20, display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", marginBottom: 18 }}>
+          <div style={{ width: 26, height: 26, borderRadius: 7, background: T.ink, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Sparkles size={14} color={T.gold} />
+          </div>
+          <span style={{ fontFamily: displayFont, fontWeight: 600, fontSize: 15, color: T.ink }}>BIOCARD Academy</span>
+        </div>
+        {nav.map((n) => <NavButton key={n.key} icon={n.icon} label={n.label} active={screen === n.key} onClick={() => setScreen(n.key)} />)}
+        <div style={{ marginTop: "auto", padding: 12, borderRadius: 12, background: T.surfaceSoft }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+            <Flame size={14} color={T.berry} /><span style={{ fontFamily: monoFont, fontSize: 13, fontWeight: 600, color: T.ink }}>{state.streak} дн.</span>
+          </div>
+          <div style={{ fontFamily: bodyFont, fontSize: 11, color: T.inkFaint }}>серия обучения</div>
+        </div>
+      </aside>
+      <main style={{ flex: 1, padding: "32px 40px", maxWidth: 980, overflowX: "hidden" }}>
+        {screen === "dashboard" && <Dashboard state={state} onGoLesson={(id) => { setState((s) => ({ ...s, _openLesson: id })); setScreen("lesson"); }} onGoModule={() => setScreen("moduleOverview")} />}
+        {screen === "map" && <CourseMap completedLessons={state.completedLessons} onOpenModule1={() => setScreen("moduleOverview")} />}
+        {screen === "moduleOverview" && <ModuleOverview completedCount={state.completedLessons} competencies={state.competencies || []} onOpenLesson={(id) => { setState((s) => ({ ...s, _openLesson: id })); setScreen("lesson"); }} />}
+        {screen === "lesson" && (
+          <Lesson
+            lessonId={state._openLesson || Math.min(state.completedLessons + 1, 8)}
+            onComplete={handleLessonComplete}
+            nextLabel={state._openLesson < 8 ? `К уроку ${state._openLesson + 1}` : "К обзору модуля"}
+            onBack={() => setScreen("moduleOverview")}
+            practiceStore={state.practiceStore}
+            onPracticeSave={handlePracticeSave}
+            userContext={userContext}
+          />
+        )}
+        {screen === "cabinet" && <Cabinet state={state} onUpdateProfile={(p) => setState((s) => ({ ...s, profile: p }))} onUpdateNotes={(n) => setState((s) => ({ ...s, notes: n }))} />}
+        {screen === "portfolio" && <Portfolio state={state} onSaveWork={handlePortfolioSave} userContext={userContext} />}
+        {screen === "library" && <LibraryScreen notes={state.notes} />}
+      </main>
+    </div>
+  );
+}
