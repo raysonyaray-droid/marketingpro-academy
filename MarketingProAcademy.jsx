@@ -1,8 +1,11 @@
-qimport { useState, useEffect, useMemo } from "react";
-import AppSidebar from "./components/layout/AppSidebar";
+import { useState, useMemo } from "react";
 import { Card, MetaRow, PageHeader, Pill, ProgressRing, SectionLabel, TermRow } from "./components/ui/Primitives";
+import AppLayout from "./components/layout/AppLayout";
+import Onboarding from "./components/onboarding/Onboarding";
 import { MODULES } from "./data/courseCatalog";
-import { loadAcademyState, saveAcademyState } from "./services/academyStorage";
+import { callAIMentor } from "./services/aiMentor";
+import { shuffle } from "./utils/shuffle";
+import useAcademyState from "./hooks/useAcademyState";
 import { FONTS, T, bodyFont, displayFont, ghostBtn, monoFont, primaryBtn, secondaryBtn } from "./styles/theme";
 import StepLesson from "./StepLesson";
 import {
@@ -11,214 +14,6 @@ import {
   X, Check, Copy, Search, Loader2,
   Save, Send, Info,
 } from "lucide-react";
-
-/* ============================================================
-   ИИ-НАСТАВНИК. Реальная проверка практических ответов через
-   Anthropic API. При ошибке сети — честное сообщение об этом,
-   а не имитация персональной обратной связи.
-   ============================================================ */
-
-async function callAIMentor({ task, answer, context }) {
-  const endpoint = import.meta.env.VITE_AI_MENTOR_URL;
-
-  if (!endpoint) {
-    return {
-      ok: false,
-      text: "Ответ сохранён. ИИ-наставник пока не подключён: добавьте адрес серверного API в переменную VITE_AI_MENTOR_URL.",
-    };
-  }
-
-  const system = `Ты — академический наставник курса BIOCARD Marketing Academy. Оцени практический ответ студента по рубрике: понятность, соответствие вопросу, наличие аргумента, использование понятий урока, конкретность, связь с рабочей ситуацией. Не хвали автоматически. Структура ответа (коротко, по-русски, без markdown-заголовков): 1) Результат — что выполнено. 2) Сильная сторона — один конкретный элемент. 3) Критическая ошибка — если есть, где нарушена логика. 4) Риск — к чему это приведёт в реальной работе. 5) Что исправить — конкретный следующий шаг. Будь краток (6–9 предложений суммарно), профессионален, без общих фраз вроде «отличная работа».`;
-  const user = `Контекст пользователя: ${context || "специалист по маркетингу и коммуникациям"}.\nЗадание: ${task}\nОтвет студента: ${answer}`;
-
-  try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ system, user }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`AI mentor request failed: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const text = typeof data.text === "string" ? data.text.trim() : "";
-
-    if (!text) {
-      throw new Error("AI mentor returned an empty response");
-    }
-
-    return { ok: true, text };
-  } catch {
-    return {
-      ok: false,
-      text: "Ответ сохранён. ИИ-наставник сейчас недоступен — попробуйте ещё раз позже.",
-    };
-  }
-}
-
-function shuffle(arr, seed) {
-  const a = arr.map((x, i) => [x, i]);
-  let s = seed || Math.floor(Math.random() * 100000);
-  for (let i = a.length - 1; i > 0; i--) {
-    s = (s * 9301 + 49297) % 233280;
-    const j = Math.floor((s / 233280) * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a.map(([x]) => x);
-}
-
-/* ============================================================
-   BIOCARD — подтверждённый профессиональный контекст.
-   Заполненные поля считаются достоверными (паспорт пользователя),
-   поля «уточнить» задаются как реальные вопросы онбординга.
-   ============================================================ */
-
-const BIOCARD_CONTEXT = {
-  company: "BIOCARD",
-  sphere: "Фармацевтическая логистика, поставки медицинской продукции, корпоративные и внешние коммуникации",
-  directions: ["SMM и корпоративные соцсети", "Внутренние коммуникации", "HR-бренд и вакансии", "Видео и интервью", "Коммуникация с руководителями"],
-  tasks: "Посты, сценарии и вопросы для интервью, анонсы, вакансии, внутренние рассылки, контент-планы, адаптация материалов под разные каналы",
-  textPreference: "Живой человеческий язык без канцелярита и признаков генерации ИИ",
-};
-
-/* ============================================================
-   ОНБОРДИНГ — короткие последовательные шаги. Подтверждённый
-   контекст BIOCARD применяется автоматически; «уточнить»-поля
-   из паспорта задаются как реальные вопросы, без догадок.
-   ============================================================ */
-
-const ONBOARD_STEPS = [
-  { key: "preferredName", type: "text", title: "Как к вам обращаться внутри курса?", placeholder: "Имя или как вам удобно" },
-  { key: "position", type: "text", title: "Как называется ваша должность сейчас?", placeholder: "Например: специалист по коммуникациям" },
-  { key: "experience", type: "single", title: "Сколько лет вы регулярно выполняете такие задачи?",
-    options: ["Меньше 1 года", "1–3 года", "3–7 лет", "Больше 7 лет"] },
-  { key: "autonomy", type: "single", title: "Какие решения вы принимаете самостоятельно?",
-    options: ["Согласую большинство решений", "Решаю тактические задачи сам, стратегию — согласую", "Принимаю большинство решений самостоятельно"] },
-  { key: "team", type: "multi", title: "Есть ли у вас команда или подрядчики?",
-    options: ["Работаю один", "Дизайнер", "Видеограф / монтажёр", "SMM-помощник", "Внешнее агентство", "Другое"] },
-  { key: "weeklyTime", type: "single", title: "Сколько часов в неделю вы реально готовы уделять обучению?",
-    options: ["До 2 часов", "2–5 часов", "5–10 часов", "Больше 10 часов"] },
-  { key: "sessionLength", type: "single", title: "Какой формат занятия удобнее?",
-    options: ["20–30 минут", "45–60 минут", "90 минут"] },
-  { key: "priority", type: "text", title: "Какой реальный проект должен улучшиться благодаря курсу за 3 месяца?", placeholder: "Например: система вакансий и HR-бренд" },
-  { key: "dataAccess", type: "single", title: "Какие данные каналов и кампаний вам доступны?",
-    options: ["Полный доступ к метрикам", "Частичный доступ / через отчёты", "Доступа к аналитике нет", "Другое"] },
-  { key: "confidentiality", type: "text", title: "Что нельзя использовать в учебных кейсах?", placeholder: "Необязательно — например: реальные контракты, медицинские данные", optional: true },
-];
-
-function OnboardStepField({ step, value, onChange }) {
-  if (step.type === "text") {
-    return (
-      <textarea
-        value={value || ""}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={step.placeholder}
-        style={{ width: "100%", minHeight: 70, padding: 14, borderRadius: 10, border: `1px solid ${T.border}`,
-          fontFamily: bodyFont, fontSize: 15, color: T.ink, resize: "vertical", boxSizing: "border-box" }}
-      />
-    );
-  }
-  if (step.type === "single") {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {step.options.map((opt) => (
-          <button key={opt} onClick={() => onChange(opt)} style={{
-            textAlign: "left", padding: "14px 16px", borderRadius: 12,
-            border: `1.5px solid ${value === opt ? T.ink : T.border}`,
-            background: value === opt ? T.ink : T.surface, color: value === opt ? T.surface : T.ink,
-            fontFamily: bodyFont, fontSize: 15, fontWeight: 500, cursor: "pointer",
-            display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            {opt}{value === opt && <Check size={16} />}
-          </button>
-        ))}
-      </div>
-    );
-  }
-  if (step.type === "multi") {
-    const sel = Array.isArray(value) ? value : [];
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {step.options.map((opt) => {
-          const isSel = sel.includes(opt);
-          return (
-            <button key={opt} onClick={() => onChange(isSel ? sel.filter((x) => x !== opt) : [...sel, opt])} style={{
-              textAlign: "left", padding: "14px 16px", borderRadius: 12,
-              border: `1.5px solid ${isSel ? T.ink : T.border}`,
-              background: isSel ? T.ink : T.surface, color: isSel ? T.surface : T.ink,
-              fontFamily: bodyFont, fontSize: 15, fontWeight: 500, cursor: "pointer",
-              display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              {opt}{isSel && <Check size={16} />}
-            </button>
-          );
-        })}
-      </div>
-    );
-  }
-  return null;
-}
-
-function Onboarding({ onFinish }) {
-  const [idx, setIdx] = useState(-1); // -1 = приветствие
-  const [answers, setAnswers] = useState({});
-
-  if (idx === -1) {
-    return (
-      <div style={{ minHeight: "100vh", background: T.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-        <div style={{ width: "100%", maxWidth: 560 }}>
-          <Pill tone="gold"><Sparkles size={13} /> BIOCARD Marketing Academy</Pill>
-          <h1 style={{ fontFamily: displayFont, fontSize: 38, fontWeight: 600, margin: "16px 0 12px", color: T.ink, lineHeight: 1.15 }}>
-            Прежде чем начать
-          </h1>
-          <p style={{ fontFamily: bodyFont, fontSize: 15, color: T.inkSoft, lineHeight: 1.6, maxWidth: 480, marginBottom: 8 }}>
-            Компания, сфера и ключевые направления вашей работы уже известны из паспорта пользователя —
-            фармацевтическая логистика, внешние и внутренние коммуникации, SMM, HR-бренд. Их не нужно повторять.
-          </p>
-          <p style={{ fontFamily: bodyFont, fontSize: 15, color: T.inkSoft, lineHeight: 1.6, maxWidth: 480, marginBottom: 8 }}>
-            Осталось уточнить {ONBOARD_STEPS.length} коротких пунктов — они определят темп, глубину и примеры
-            в курсе. Дальше — честная диагностика в трёх частях, без баллов «на глазок».
-          </p>
-          <button onClick={() => setIdx(0)} style={primaryBtn}>Начать <ArrowRight size={16} /></button>
-        </div>
-      </div>
-    );
-  }
-
-  const step = ONBOARD_STEPS[idx];
-  const val = answers[step.key];
-  const canNext = step.optional || (step.type === "multi" ? (val && val.length > 0) : !!val);
-
-  return (
-    <div style={{ minHeight: "100vh", background: T.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <div style={{ width: "100%", maxWidth: 560 }}>
-        <div style={{ display: "flex", gap: 6, marginBottom: 28 }}>
-          {ONBOARD_STEPS.map((_, i) => (
-            <div key={i} style={{ height: 4, borderRadius: 2, flex: 1, background: i <= idx ? T.gold : T.border, transition: "background 0.3s ease" }} />
-          ))}
-        </div>
-        <SectionLabel>Шаг {idx + 1} из {ONBOARD_STEPS.length}</SectionLabel>
-        <h2 style={{ fontFamily: displayFont, fontSize: 26, fontWeight: 600, color: T.ink, margin: "8px 0 20px" }}>{step.title}</h2>
-        <OnboardStepField step={step} value={val} onChange={(v) => setAnswers({ ...answers, [step.key]: v })} />
-        <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
-          <button onClick={() => setIdx(idx - 1)} style={secondaryBtn}><ArrowLeft size={15} /> Назад</button>
-          <button
-            onClick={() => idx < ONBOARD_STEPS.length - 1 ? setIdx(idx + 1) : onFinish({ ...BIOCARD_CONTEXT, ...answers })}
-            disabled={!canNext}
-            style={{ ...primaryBtn, marginTop: 0, opacity: canNext ? 1 : 0.4 }}>
-            {idx < ONBOARD_STEPS.length - 1 ? "Далее" : "К диагностике"} <ArrowRight size={15} />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ============================================================
-   ДИАГНОСТИКА — часть A (фундамент), часть B (кейсы), часть C
-   (открытая работа под профиль). Ответы не раскрываются до
-   конца всей диагностики; варианты перемешиваются каждый раз.
-   ============================================================ */
 
 const PART_A = [
   { id: "a1", tag: "terms", q: "Компания вложилась в рекламу нового продукта, но не изменила ни цену, ни каналы продаж, ни сам продукт. Что из этого является маркетингом, а что — только рекламой?",
@@ -1528,74 +1323,8 @@ function LibraryScreen({ notes }) {
    КОРНЕВОЕ ПРИЛОЖЕНИЕ
    ============================================================ */
 
-const DEFAULT_STATE = {
-  profile: null, competencies: null, rawDiag: null,
-  completedLessons: 0, points: 0, streak: 0, lastActive: null,
-  practiceStore: {}, portfolio: {}, notes: "", history: [],
-};
-
 export default function App() {
-  const [loaded, setLoaded] = useState(false);
-  const [state, setState] = useState(DEFAULT_STATE);
-  const [screen, setScreen] = useState("dashboard");
-  const [stage, setStage] = useState("boot"); // boot | onboarding | diagnostic | app
-
-  useEffect(() => {
-    (() => {
-      const s = loadAcademyState();
-      if (s && s.profile && s.competencies) {
-        const today = new Date().toISOString().slice(0, 10);
-        let streak = s.streak || 0;
-        if (s.lastActive) {
-          const diffDays = Math.round((new Date(today) - new Date(s.lastActive)) / 86400000);
-          if (diffDays === 1) streak += 1; else if (diffDays > 1) streak = 1;
-        } else streak = 1;
-        setState({ ...DEFAULT_STATE, ...s, streak, lastActive: today });
-        setStage("app");
-      } else if (s && s.profile && !s.competencies) {
-        setState({ ...DEFAULT_STATE, ...s });
-        setStage("diagnostic");
-      } else {
-        setStage("onboarding");
-      }
-      setLoaded(true);
-    })();
-  }, []);
-
-  useEffect(() => { if (loaded) saveAcademyState(state); }, [state, loaded]);
-
-  function pushHistory(text) {
-    const today = new Date().toISOString().slice(0, 10);
-    setState((s) => ({ ...s, history: [...(s.history || []), { date: today, text }] }));
-  }
-
-  function handleOnboardFinish(profile) {
-    setState((s) => ({ ...s, profile }));
-    setStage("diagnostic");
-  }
-  function handleDiagnosticComplete({ competencies, rawDiag }) {
-    setState((s) => ({ ...s, competencies, rawDiag, points: s.points + 20 }));
-    pushHistory("Пройдена входная диагностика");
-    setStage("app");
-    setScreen("dashboard");
-  }
-  function handleLessonComplete(lessonId, score, total) {
-    setState((s) => ({
-      ...s,
-      completedLessons: Math.max(s.completedLessons, lessonId),
-      points: s.points + 30 + score * 5,
-    }));
-    pushHistory(`Завершён урок ${lessonId} (тест ${score}/${total})`);
-    setScreen("moduleOverview");
-  }
-  function handlePracticeSave(lessonKey, level, value) {
-    setState((s) => ({ ...s, practiceStore: { ...s.practiceStore, [lessonKey]: { ...(s.practiceStore[lessonKey] || {}), [level]: value } } }));
-  }
-  function handlePortfolioSave(work) {
-    setState((s) => ({ ...s, portfolio: { ...s.portfolio, module1FinalWork: work } }));
-  }
-
-  const userContext = state.profile ? `${state.profile.position || "специалист по коммуникациям"} в ${state.profile.company}, сфера — ${state.profile.sphere}. Ключевые направления: ${(state.profile.directions || []).join(", ")}.` : "";
+  const { loaded, state, stage, screen, setScreen, actions, userContext } = useAcademyState();
 
   if (!loaded || stage === "boot") {
     return (
@@ -1607,36 +1336,37 @@ export default function App() {
   }
 
   if (stage === "onboarding") {
-    return <div style={{ fontFamily: bodyFont }}><style>{FONTS}</style><Onboarding onFinish={handleOnboardFinish} /></div>;
-  }
-  if (stage === "diagnostic") {
-    return <div style={{ fontFamily: bodyFont }}><style>{FONTS}</style><Onboard_Diagnostic_Flow onComplete={handleDiagnosticComplete} /></div>;
+    return <div style={{ fontFamily: bodyFont }}><style>{FONTS}</style><Onboarding onFinish={actions.finishOnboarding} /></div>;
   }
 
+  if (stage === "diagnostic") {
+    return <div style={{ fontFamily: bodyFont }}><style>{FONTS}</style><Onboard_Diagnostic_Flow onComplete={actions.completeDiagnostic} /></div>;
+  }
+
+  const activeLessonId = state._openLesson || Math.min(state.completedLessons + 1, 8);
 
   return (
-    <div style={{ fontFamily: bodyFont, background: T.bg, minHeight: "100vh", display: "flex" }}>
+    <>
       <style>{FONTS}</style>
-      <AppSidebar screen={screen} streak={state.streak} onNavigate={setScreen} />
-      <main style={{ flex: 1, padding: "32px 40px", maxWidth: 980, overflowX: "hidden" }}>
-        {screen === "dashboard" && <Dashboard state={state} onGoLesson={(id) => { setState((s) => ({ ...s, _openLesson: id })); setScreen("lesson"); }} onGoModule={() => setScreen("moduleOverview")} />}
+      <AppLayout screen={screen} streak={state.streak} onNavigate={setScreen}>
+        {screen === "dashboard" && <Dashboard state={state} onGoLesson={actions.openLesson} onGoModule={() => setScreen("moduleOverview")} />}
         {screen === "map" && <CourseMap completedLessons={state.completedLessons} onOpenModule1={() => setScreen("moduleOverview")} />}
-        {screen === "moduleOverview" && <ModuleOverview completedCount={state.completedLessons} competencies={state.competencies || []} onOpenLesson={(id) => { setState((s) => ({ ...s, _openLesson: id })); setScreen("lesson"); }} />}
+        {screen === "moduleOverview" && <ModuleOverview completedCount={state.completedLessons} competencies={state.competencies || []} onOpenLesson={actions.openLesson} />}
         {screen === "lesson" && (
           <Lesson
-            lessonId={state._openLesson || Math.min(state.completedLessons + 1, 8)}
-            onComplete={handleLessonComplete}
-            nextLabel={state._openLesson < 8 ? `К уроку ${state._openLesson + 1}` : "К обзору модуля"}
+            lessonId={activeLessonId}
+            onComplete={actions.completeLesson}
+            nextLabel={activeLessonId < 8 ? `К уроку ${activeLessonId + 1}` : "К обзору модуля"}
             onBack={() => setScreen("moduleOverview")}
             practiceStore={state.practiceStore}
-            onPracticeSave={handlePracticeSave}
+            onPracticeSave={actions.savePractice}
             userContext={userContext}
           />
         )}
-        {screen === "cabinet" && <Cabinet state={state} onUpdateProfile={(p) => setState((s) => ({ ...s, profile: p }))} onUpdateNotes={(n) => setState((s) => ({ ...s, notes: n }))} />}
-        {screen === "portfolio" && <Portfolio state={state} onSaveWork={handlePortfolioSave} userContext={userContext} />}
+        {screen === "cabinet" && <Cabinet state={state} onUpdateProfile={actions.updateProfile} onUpdateNotes={actions.updateNotes} />}
+        {screen === "portfolio" && <Portfolio state={state} onSaveWork={actions.savePortfolio} userContext={userContext} />}
         {screen === "library" && <LibraryScreen notes={state.notes} />}
-      </main>
-    </div>
+      </AppLayout>
+    </>
   );
 }
