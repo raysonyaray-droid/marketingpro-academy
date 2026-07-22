@@ -28,7 +28,7 @@ async function callAIMentor({ task, answer, context }) {
     };
   }
 
-  const system = `Ты — академический наставник курса BIOCARD Marketing Academy. Оцени практический ответ студента по рубрике: понятность, соответствие вопросу, наличие аргумента, использование понятий урока, конкретность, связь с рабочей ситуацией. Не хвали автоматически. Структура ответа (коротко, по-русски, без markdown-заголовков): 1) Результат — что выполнено. 2) Сильная сторона — один конкретный элемент. 3) Критическая ошибка — если есть, где нарушена логика. 4) Риск — к чему это приведёт в реальной работе. 5) Что исправить — конкретный следующий шаг. Будь краток (6–9 предложений суммарно), профессионален, без общих фраз вроде «отличная работа».`;
+  const system = `Ты — строгий ИИ-наставник курса BIOCARD Marketing Academy. Проверяй только по фактам из задания и ответа студента. Не придумывай контекст, не хвали автоматически и не маскируй ошибки мягкими формулировками. Оцени по пяти критериям: соответствие вопросу, логика, использование понятий урока, конкретность, применимость в рабочей ситуации. Если данных недостаточно, прямо укажи, чего именно не хватает. Дай ответ по-русски, без markdown-заголовков, в структуре: Результат; Сильная сторона; Критическая ошибка или пробел; Практический риск; Следующий шаг. В конце добавь оценку от 0 до 100 и короткий вердикт: «зачтено», «нужна доработка» или «не зачтено». Общий объём — 7–10 предложений, без общих фраз вроде «отличная работа».`;
   const user = `Контекст пользователя: ${context || "специалист по маркетингу и коммуникациям"}.\nЗадание: ${task}\nОтвет студента: ${answer}`;
 
   try {
@@ -43,7 +43,14 @@ async function callAIMentor({ task, answer, context }) {
     }
 
     const data = await response.json();
-    const text = typeof data.text === "string" ? data.text.trim() : "";
+    const text = [
+      data?.text,
+      data?.feedback,
+      data?.message,
+      data?.content?.[0]?.text,
+      data?.choices?.[0]?.message?.content,
+      data?.result?.text,
+    ].find((value) => typeof value === "string" && value.trim())?.trim() || "";
 
     if (!text) {
       throw new Error("AI mentor returned an empty response");
@@ -1187,10 +1194,39 @@ function LegacyLesson({ lessonId, onComplete, nextLabel, onBack, practiceStore, 
   const q = quiz[quizIdx];
   const orderedOptions = q ? q.order.map((oi) => q.options[oi]) : [];
 
-  function submitAnswer() { setChecked(true); if (q.options[selected].correct) setScore((s) => s + 1); }
+  const selectedIds = q?.type === "multi"
+    ? (Array.isArray(selected) ? selected : [])
+    : (selected === null ? [] : [selected]);
+  const correctIds = q ? q.options.map((option, index) => option.correct ? index : null).filter((index) => index !== null) : [];
+  const isQuestionCorrect = q
+    ? selectedIds.length === correctIds.length && correctIds.every((index) => selectedIds.includes(index))
+    : false;
+
+  function toggleOption(optionId) {
+    if (checked) return;
+    if (q.type === "multi") {
+      setSelected((current) => {
+        const values = Array.isArray(current) ? current : [];
+        return values.includes(optionId)
+          ? values.filter((id) => id !== optionId)
+          : [...values, optionId];
+      });
+    } else {
+      setSelected(optionId);
+    }
+  }
+
+  function submitAnswer() {
+    setChecked(true);
+    if (isQuestionCorrect) setScore((s) => s + 1);
+  }
+
   function nextQuestion() {
-    if (quizIdx < quiz.length - 1) { setQuizIdx((i) => i + 1); setSelected(null); setChecked(false); }
-    else setTab("wrap");
+    if (quizIdx < quiz.length - 1) {
+      setQuizIdx((i) => i + 1);
+      setSelected(null);
+      setChecked(false);
+    } else setTab("wrap");
   }
 
   const psKey = `l${lessonId}`;
@@ -1338,34 +1374,53 @@ function LegacyLesson({ lessonId, onComplete, nextLabel, onBack, practiceStore, 
           </div>
           <Card style={{ padding: 26, borderRadius: 20, boxShadow: "0 10px 30px rgba(24,28,54,0.06)" }}>
             <p style={{ fontFamily: displayFont, fontSize: 21, fontWeight: 500, color: T.ink, lineHeight: 1.45, margin: "0 0 20px" }}>{q.q}</p>
+            {q.type === "multi" && (
+              <p style={{ fontFamily: bodyFont, fontSize: 12, color: T.inkFaint, margin: "-10px 0 16px" }}>Можно выбрать несколько вариантов.</p>
+            )}
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {orderedOptions.map((opt, i) => {
                 const optId = q.order[i];
-                const isSel = selected === optId;
+                const isSel = selectedIds.includes(optId);
                 const isRight = checked && opt.correct;
                 const isWrong = checked && isSel && !opt.correct;
                 return (
-                  <button key={i} onClick={() => !checked && setSelected(optId)} style={{
+                  <button key={i} onClick={() => toggleOption(optId)} style={{
                     textAlign: "left", padding: "13px 16px", borderRadius: 10, cursor: checked ? "default" : "pointer",
                     border: `1.5px solid ${isRight ? T.teal : isWrong ? T.berry : isSel ? T.ink : T.border}`,
                     background: isRight ? T.tealSoft : isWrong ? T.berrySoft : isSel ? T.surfaceSoft : T.surface,
                     fontFamily: bodyFont, fontSize: 14, color: T.ink, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    {opt.t}{isRight && <CheckCircle2 size={16} color={T.teal} />}{isWrong && <X size={16} color={T.berry} />}
+                    <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span style={{
+                        width: 18,
+                        height: 18,
+                        flex: "0 0 18px",
+                        borderRadius: q.type === "multi" ? 5 : "50%",
+                        border: `1.5px solid ${isSel ? T.ink : T.border}`,
+                        background: isSel ? T.ink : T.surface,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}>
+                        {isSel && <Check size={12} color={T.surface} />}
+                      </span>
+                      <span>{opt.t}</span>
+                    </span>
+                    {isRight && <CheckCircle2 size={16} color={T.teal} />}{isWrong && <X size={16} color={T.berry} />}
                   </button>
                 );
               })}
             </div>
             {checked && (
               <div style={{ marginTop: 16, padding: 14, borderRadius: 10, background: T.surfaceSoft }}>
-                <div style={{ fontFamily: bodyFont, fontSize: 12, fontWeight: 700, color: q.options[selected].correct ? T.teal : T.berry, marginBottom: 4 }}>
-                  {q.options[selected].correct ? "Верно" : "Неверно"}
+                <div style={{ fontFamily: bodyFont, fontSize: 12, fontWeight: 700, color: isQuestionCorrect ? T.teal : T.berry, marginBottom: 4 }}>
+                  {isQuestionCorrect ? "Верно" : "Неверно"}
                 </div>
                 <p style={{ fontFamily: bodyFont, fontSize: 13, color: T.inkSoft, lineHeight: 1.5, margin: 0 }}>{q.explain}</p>
               </div>
             )}
             <div style={{ marginTop: 18 }}>
               {!checked ? (
-                <button onClick={submitAnswer} disabled={selected === null} style={{ ...primaryBtn, marginTop: 0, opacity: selected === null ? 0.4 : 1 }}>Ответить</button>
+                <button onClick={submitAnswer} disabled={selectedIds.length === 0} style={{ ...primaryBtn, marginTop: 0, opacity: selectedIds.length === 0 ? 0.4 : 1 }}>Ответить</button>
               ) : (
                 <button onClick={nextQuestion} style={{ ...primaryBtn, marginTop: 0 }}>{quizIdx < quiz.length - 1 ? "Следующий вопрос" : "К итогам урока"} <ArrowRight size={15} /></button>
               )}
