@@ -1493,9 +1493,9 @@ function Dashboard({ state, onGoLesson }) {
   const weakest = competencies ? [...competencies].sort((a, b) => (a.correct / (a.evidence || 1)) - (b.correct / (b.evidence || 1)))[0] : null;
 
   return (
-    <div>
+    <div className="dashboard-page">
       <PageHeader eyebrow={`С возвращением, ${profile.preferredName || "коллега"}`} title="Главный экран" />
-      <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 20, marginBottom: 20 }}>
+      <div className="dashboard-hero-grid" style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 20, marginBottom: 20 }}>
         <Card style={{ background: T.ink, color: T.surface, border: "none" }}>
           <Pill tone="gold">Модуль 01 · Урок {nextLessonId} из 8</Pill>
           <h3 style={{ fontFamily: displayFont, fontSize: 26, fontWeight: 600, margin: "14px 0 8px" }}>
@@ -1520,7 +1520,7 @@ function Dashboard({ state, onGoLesson }) {
         </Card>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 20 }}>
+      <div className="dashboard-stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 20 }}>
         <StatCard icon={Flame} tone="berry" value={String(streak)} label="дней подряд" />
         <StatCard icon={Star} tone="gold" value={String(points)} label="баллов за реальные действия" />
         <StatCard icon={Trophy} tone="indigo" value="0" label="сертификатов" />
@@ -1650,9 +1650,9 @@ function Cabinet({ state, onUpdateProfile, onUpdateNotes }) {
   const sorted = competencies ? [...competencies].sort((a, b) => (b.correct / (b.evidence || 1)) - (a.correct / (a.evidence || 1))) : [];
 
   return (
-    <div>
+    <div className="cabinet-page">
       <PageHeader eyebrow="Личный кабинет" title="Профиль и карта компетенций" />
-      <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 20 }}>
+      <div className="cabinet-grid" style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 20 }}>
         <div>
           <Card style={{ marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -2083,6 +2083,31 @@ export default function App() {
             margin: 0 !important;
             overflow-x: hidden !important;
           }
+          .dashboard-page, .cabinet-page {
+            width: 100%;
+            min-width: 0;
+            max-width: 100%;
+          }
+          .dashboard-hero-grid, .cabinet-grid {
+            grid-template-columns: minmax(0, 1fr) !important;
+            width: 100%;
+            min-width: 0;
+          }
+          .dashboard-stats-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            width: 100%;
+            min-width: 0;
+          }
+          .dashboard-page > *, .cabinet-page > *,
+          .dashboard-hero-grid > *, .dashboard-stats-grid > *, .cabinet-grid > * {
+            min-width: 0;
+            max-width: 100%;
+          }
+          .cabinet-page [style*="justify-content: space-between"] { gap: 10px; }
+          .cabinet-page [style*="justify-content: space-between"] > span {
+            min-width: 0;
+            overflow-wrap: anywhere;
+          }
           .lesson-page-v6 { width: 100% !important; max-width: 100% !important; }
           .lesson-page-v6 section { max-width: 100%; }
           .lesson-page-v6 h1 { font-size: clamp(28px, 9vw, 38px) !important; overflow-wrap: anywhere; }
@@ -2144,6 +2169,7 @@ export default function App() {
 
         @media (max-width: 390px) {
           .academy-main { padding-left: 10px !important; padding-right: 10px !important; }
+          .dashboard-stats-grid { grid-template-columns: minmax(0, 1fr) !important; }
           .v6-stage-row { grid-template-columns: 1fr; }
           .lesson-page-v6 > div[style*="grid-template-columns: repeat(4"] {
             grid-template-columns: 1fr !important;
