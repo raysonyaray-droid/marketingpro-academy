@@ -13,54 +13,43 @@ import {
 } from "lucide-react";
 
 /* ============================================================
-   ИИ-НАСТАВНИК. Реальная проверка практических ответов через
-   Anthropic API. При ошибке сети — честное сообщение об этом,
-   а не имитация персональной обратной связи.
+   ИИ-НАСТАВНИК. Проверка практических ответов через серверную
+   функцию /api/ai-mentor. Ключ Gemini хранится только на Vercel.
    ============================================================ */
 
 async function callAIMentor({ task, answer, context }) {
-  const endpoint = import.meta.env.VITE_AI_MENTOR_URL;
-
-  if (!endpoint) {
-    return {
-      ok: false,
-      text: "Ответ сохранён. ИИ-наставник пока не подключён: добавьте адрес серверного API в переменную VITE_AI_MENTOR_URL.",
-    };
-  }
-
-  const system = `Ты — строгий ИИ-наставник курса BIOCARD Marketing Academy. Проверяй только по фактам из задания и ответа студента. Не придумывай контекст, не хвали автоматически и не маскируй ошибки мягкими формулировками. Оцени по пяти критериям: соответствие вопросу, логика, использование понятий урока, конкретность, применимость в рабочей ситуации. Если данных недостаточно, прямо укажи, чего именно не хватает. Дай ответ по-русски, без markdown-заголовков, в структуре: Результат; Сильная сторона; Критическая ошибка или пробел; Практический риск; Следующий шаг. В конце добавь оценку от 0 до 100 и короткий вердикт: «зачтено», «нужна доработка» или «не зачтено». Общий объём — 7–10 предложений, без общих фраз вроде «отличная работа».`;
-  const user = `Контекст пользователя: ${context || "специалист по маркетингу и коммуникациям"}.\nЗадание: ${task}\nОтвет студента: ${answer}`;
+  const endpoint = import.meta.env.VITE_AI_MENTOR_URL || "/api/ai-mentor";
 
   try {
     const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ system, user }),
+      body: JSON.stringify({ task, answer, context }),
     });
 
+    const data = await response.json().catch(() => ({}));
+
     if (!response.ok) {
-      throw new Error(`AI mentor request failed: ${response.status}`);
+      throw new Error(data?.error || `AI mentor request failed: ${response.status}`);
     }
 
-    const data = await response.json();
-    const text = [
-      data?.text,
-      data?.feedback,
-      data?.message,
-      data?.content?.[0]?.text,
-      data?.choices?.[0]?.message?.content,
-      data?.result?.text,
-    ].find((value) => typeof value === "string" && value.trim())?.trim() || "";
-
-    if (!text) {
-      throw new Error("AI mentor returned an empty response");
-    }
-
-    return { ok: true, text };
-  } catch {
+    return {
+      ok: true,
+      result: {
+        score: Number.isFinite(Number(data?.score)) ? Number(data.score) : null,
+        status: ["passed", "revision", "failed"].includes(data?.status) ? data.status : "revision",
+        verdict: data?.verdict || "Ответ проверен",
+        feedback: data?.feedback || "Проверка завершена.",
+        mistakes: Array.isArray(data?.mistakes) ? data.mistakes : [],
+        strengths: Array.isArray(data?.strengths) ? data.strengths : [],
+        nextStep: data?.nextStep || "Уточните ответ и отправьте его повторно.",
+      },
+    };
+  } catch (error) {
+    console.error("AI mentor error:", error);
     return {
       ok: false,
-      text: "Ответ сохранён. ИИ-наставник сейчас недоступен — попробуйте ещё раз позже.",
+      error: "Ответ сохранён. ИИ-наставник сейчас недоступен — попробуйте ещё раз позже.",
     };
   }
 }
@@ -1076,8 +1065,8 @@ const LESSON_CONTENT = {
 
 /* ============================================================
    УРОК — данные + рендер по академическому стандарту.
-   Практика проверяется реальным ИИ-наставником (Anthropic API),
-   с честным сообщением при недоступности сети.
+   Практика проверяется ИИ-наставником через Gemini API,
+   с честным сообщением при недоступности сервиса.
    ============================================================ */
 
 function AIFeedbackBox({ task, context, saved, onSave }) {
@@ -1086,28 +1075,91 @@ function AIFeedbackBox({ task, context, saved, onSave }) {
   const [loading, setLoading] = useState(false);
 
   async function submit() {
+    if (!answer.trim() || loading) return;
     setLoading(true);
     const res = await callAIMentor({ task, answer, context });
-    setFeedback(res.text);
+    const nextFeedback = res.ok ? res.result : { error: res.error };
+    setFeedback(nextFeedback);
     setLoading(false);
-    onSave({ answer, feedback: res.text });
+    onSave({ answer, feedback: nextFeedback });
   }
+
+  const statusMeta = {
+    passed: { label: "Зачтено", background: "#E6F4EC", color: "#287A55" },
+    revision: { label: "Нужна доработка", background: "#FFF4DB", color: "#8A5B00" },
+    failed: { label: "Не зачтено", background: "#FCEAEC", color: "#A63A4D" },
+  };
+
+  const normalizedFeedback = typeof feedback === "string" ? { feedback } : feedback;
+  const status = statusMeta[normalizedFeedback?.status] || statusMeta.revision;
 
   return (
     <div>
-      <textarea value={answer} onChange={(e) => { setAnswer(e.target.value); }} placeholder="Ваш ответ…"
-        style={{ width: "100%", minHeight: 100, padding: 12, borderRadius: 10, border: `1px solid ${T.border}`,
+      <div style={{ marginBottom: 10, padding: 12, borderRadius: 10, background: T.surfaceSoft, border: `1px solid ${T.border}` }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+          <Sparkles size={15} />
+          <strong style={{ fontFamily: bodyFont, fontSize: 13 }}>ИИ-наставник Академии</strong>
+        </div>
+        <p style={{ margin: 0, fontFamily: bodyFont, fontSize: 12, lineHeight: 1.55, color: T.muted }}>
+          Проверит логику, конкретность и применение понятий урока. Не передавайте персональные данные сотрудников и конфиденциальную информацию компании.
+        </p>
+      </div>
+
+      <textarea value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Ваш ответ…"
+        style={{ width: "100%", minHeight: 120, padding: 12, borderRadius: 10, border: `1px solid ${T.border}`,
           fontFamily: bodyFont, fontSize: 13, color: T.ink, resize: "vertical", boxSizing: "border-box" }} />
-      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
         <button onClick={() => onSave({ answer, feedback })} style={ghostBtn}><Save size={13} /> Сохранить черновик</button>
-        <button onClick={submit} disabled={!answer.trim() || loading} style={{ ...ghostBtn, opacity: !answer.trim() || loading ? 0.5 : 1 }}>
-          {loading ? <Loader2 size={13} className="spin" /> : <Send size={13} />} Отправить ИИ-наставнику
+        <button onClick={submit} disabled={!answer.trim() || loading} style={{ ...primaryBtn, opacity: !answer.trim() || loading ? 0.5 : 1 }}>
+          {loading ? <Loader2 size={13} className="spin" /> : <Send size={13} />} {loading ? "Проверяем…" : "Проверить ответ"}
         </button>
       </div>
-      {feedback && (
-        <div style={{ marginTop: 12, padding: 14, borderRadius: 10, background: T.surfaceSoft }}>
-          <SectionLabel>Обратная связь</SectionLabel>
-          <p style={{ fontFamily: bodyFont, fontSize: 13, color: T.ink, lineHeight: 1.6, marginTop: 8, whiteSpace: "pre-wrap" }}>{feedback}</p>
+
+      {normalizedFeedback?.error && (
+        <div style={{ marginTop: 12, padding: 14, borderRadius: 10, background: "#FCEAEC", color: "#8D2638", fontFamily: bodyFont, fontSize: 13 }}>
+          {normalizedFeedback.error}
+        </div>
+      )}
+
+      {normalizedFeedback && !normalizedFeedback.error && (
+        <div style={{ marginTop: 14, padding: 16, borderRadius: 14, background: T.surfaceSoft, border: `1px solid ${T.border}` }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <div>
+              <SectionLabel>Обратная связь наставника</SectionLabel>
+              <h4 style={{ margin: "5px 0 0", fontFamily: bodyFont, fontSize: 16, color: T.ink }}>{normalizedFeedback.verdict || "Ответ проверен"}</h4>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {normalizedFeedback.score !== null && normalizedFeedback.score !== undefined && (
+                <strong style={{ fontFamily: monoFont, fontSize: 18 }}>{normalizedFeedback.score}/100</strong>
+              )}
+              {normalizedFeedback.status && (
+                <span style={{ padding: "6px 10px", borderRadius: 999, background: status.background, color: status.color, fontFamily: bodyFont, fontSize: 12, fontWeight: 700 }}>{status.label}</span>
+              )}
+            </div>
+          </div>
+
+          <p style={{ fontFamily: bodyFont, fontSize: 13, color: T.ink, lineHeight: 1.65, margin: "14px 0 0", whiteSpace: "pre-wrap" }}>{normalizedFeedback.feedback}</p>
+
+          {!!normalizedFeedback.strengths?.length && (
+            <div style={{ marginTop: 14 }}>
+              <strong style={{ fontFamily: bodyFont, fontSize: 12 }}>Что получилось</strong>
+              <ul style={{ margin: "7px 0 0", paddingLeft: 18, fontFamily: bodyFont, fontSize: 13, lineHeight: 1.6 }}>{normalizedFeedback.strengths.map((item, index) => <li key={`strength-${index}`}>{item}</li>)}</ul>
+            </div>
+          )}
+
+          {!!normalizedFeedback.mistakes?.length && (
+            <div style={{ marginTop: 14 }}>
+              <strong style={{ fontFamily: bodyFont, fontSize: 12 }}>Что нужно доработать</strong>
+              <ul style={{ margin: "7px 0 0", paddingLeft: 18, fontFamily: bodyFont, fontSize: 13, lineHeight: 1.6 }}>{normalizedFeedback.mistakes.map((item, index) => <li key={`mistake-${index}`}>{item}</li>)}</ul>
+            </div>
+          )}
+
+          {normalizedFeedback.nextStep && (
+            <div style={{ marginTop: 14, padding: 12, borderRadius: 10, background: "#FFFFFF", border: `1px solid ${T.border}` }}>
+              <strong style={{ fontFamily: bodyFont, fontSize: 12 }}>Следующий шаг</strong>
+              <p style={{ margin: "5px 0 0", fontFamily: bodyFont, fontSize: 13, lineHeight: 1.55 }}>{normalizedFeedback.nextStep}</p>
+            </div>
+          )}
         </div>
       )}
     </div>

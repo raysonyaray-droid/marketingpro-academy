@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { LESSON_CONTENT, MODULE1_LESSON_META } from "./data/lessons/module1";
 import { ArrowLeft, ArrowRight, CheckCircle2, CircleHelp, Lightbulb, RotateCcw, Trophy, X } from "lucide-react";
 
 const C = {
@@ -157,6 +158,111 @@ const LESSON = {
   ],
 };
 
+
+const LESSON_2 = {
+  id: 2,
+  title: "Как менялась логика маркетинга",
+  eyebrow: "Модуль 1 · Урок 2",
+  duration: "45–55 минут",
+  outcomes: [
+    "Различать производственную, товарную, сбытовую и маркетинговую ориентации",
+    "Распознавать маркетинговую близорукость в рабочих решениях",
+    "Понимать, почему разные ориентации могут сосуществовать в одной компании",
+  ],
+  steps: [
+    {
+      type: "challenge", label: "Вызов", title: "Хороший продукт сам себя не продаёт",
+      text: "Компания улучшает технические характеристики сервиса, но клиенты всё чаще выбирают более простого конкурента. Руководство отвечает новым циклом доработок и усилением отдела продаж.",
+      question: "В чём наиболее вероятная управленческая ошибка?",
+      options: [
+        { text: "Компания слишком мало говорит о характеристиках", feedback: "Возможно, но проблема глубже: характеристики могут не соответствовать главной задаче клиента." },
+        { text: "Компания определяет ценность через продукт, а не через задачу клиента", correct: true, feedback: "Верно. Это типичный риск товарной ориентации и маркетинговой близорукости." },
+        { text: "Компания недостаточно быстро производит", feedback: "Скорость производства не объясняет, почему покупатели выбирают более простую альтернативу." },
+        { text: "Нужно немедленно снизить цену", feedback: "Снижение цены без понимания причины выбора может только уменьшить маржу." },
+      ],
+    },
+    {
+      type: "theory", label: "Теория 1", title: "Ориентация компании — это логика принятия решений",
+      paragraphs: [
+        "Производственная ориентация ставит в центр эффективность, доступность и масштаб. Товарная — характеристики и качество продукта. Сбытовая — активное стимулирование сделки. Маркетинговая — выбранную аудиторию и ценность, которую компания создаёт для неё.",
+        "Это не четыре строгие исторические эпохи. В одной компании они могут сосуществовать: производство отвечает за эффективность, продукт — за качество, продажи — за сделку. Вопрос в том, какая логика становится главной при спорном решении.",
+      ],
+      callout: "Проблема начинается не с эффективности, качества или продаж самих по себе, а когда один критерий становится единственным и вытесняет понимание клиента.",
+    },
+    {
+      type: "classify", label: "Мини-практика", title: "Какая логика доминирует?",
+      instruction: "Отнесите ситуацию к фокусу на продукте или к фокусу на задаче клиента.",
+      cards: [
+        { text: "Команда добавляет функции, потому что конкуренты уже добавили их", bucket: "practice" },
+        { text: "Перед доработкой команда проверяет, какую проблему клиента решит новая функция", bucket: "system" },
+        { text: "Презентация перечисляет только технические характеристики услуги", bucket: "practice" },
+        { text: "Предложение связывает характеристики со сроками, рисками и усилиями клиента", bucket: "system" },
+      ],
+    },
+    {
+      type: "timeline", label: "Четыре ориентации", title: "Как меняется главный вопрос компании",
+      items: [
+        { era: "Производственная", text: "Как сделать продукт доступнее, быстрее и дешевле в производстве?" },
+        { era: "Товарная", text: "Как сделать продукт лучше по характеристикам и качеству?" },
+        { era: "Сбытовая", text: "Как убедить покупателя совершить сделку сейчас?" },
+        { era: "Маркетинговая", text: "Для кого мы создаём ценность и какую задачу решаем лучше альтернатив?" },
+        { era: "Холистическая", text: "Как связать клиента, сотрудников, партнёров, процессы и общественную ответственность в единую систему?" },
+      ],
+    },
+    {
+      type: "theory", label: "Теория 2", title: "Маркетинговая близорукость: улучшать продукт и всё равно терять рынок",
+      paragraphs: [
+        "Маркетинговая близорукость возникает, когда компания определяет свой бизнес через текущий продукт, а не через задачу клиента. Тогда она может последовательно улучшать то, что постепенно перестаёт быть лучшим способом решения этой задачи.",
+        "Противоядие — регулярно проверять не только удовлетворённость текущим продуктом, но и альтернативные способы, которыми клиент решает ту же задачу.",
+      ],
+      callout: "Клиент покупает не склад, перевозку или публикацию как таковые. Он покупает доступность товара, снижение риска, предсказуемость, экономию времени или другой результат.",
+    },
+    {
+      type: "case", label: "Кейс BIOCARD", title: "Красивое сообщение не исправляет слабый процесс",
+      text: "Сотрудникам нужно объяснить организационное изменение. Команда готовит яркую коммуникацию, но причины изменения не раскрыты, процесс не упрощён, а вопросы сотрудников не собраны.",
+      question: "Какая логика здесь доминирует?",
+      options: [
+        { text: "Маркетинговая: компания изучила аудиторию и изменила ценность", feedback: "Нет: аудитория и причины сопротивления не исследованы." },
+        { text: "Сбытовая: упор на убеждение вместо устранения причины и настройки процесса", correct: true, feedback: "Верно. Коммуникация пытается продать решение, не меняя его сути и не снижая неопределённость сотрудников." },
+        { text: "Производственная: компания увеличивает выпуск", feedback: "Ситуация не связана с масштабом производства." },
+        { text: "Холистическая: все функции уже согласованы", feedback: "Наоборот, связь между процессом, руководителями и коммуникацией отсутствует." },
+      ],
+    },
+    {
+      type: "work", label: "Связь с работой", title: "Проверьте ориентацию по реальному решению",
+      text: "Выберите недавнее решение вашей команды. Не смотрите на декларации — восстановите фактическую логику выбора.",
+      prompts: [
+        "Какой критерий был главным: эффективность, качество продукта, объём продаж или ценность для выбранной аудитории?",
+        "Какие данные о клиенте или сотруднике использовались?",
+        "Что изменилось бы в решении при более сильной маркетинговой ориентации?",
+      ],
+    },
+    {
+      type: "quiz", label: "Проверка", title: "Закрепите различия между ориентациями",
+      questions: [
+        { q: "Что характеризует товарную ориентацию?", options: ["Фокус на характеристиках и качестве продукта", "Фокус только на снижении цены", "Фокус на долгосрочных отношениях", "Фокус на общественной ответственности"], answer: 0, explain: "Товарная ориентация исходит из предположения, что лучший продукт будет выбран автоматически." },
+        { q: "Что такое маркетинговая близорукость?", options: ["Недостаток рекламного бюджета", "Определение бизнеса через текущий продукт, а не задачу клиента", "Отказ от улучшения продукта", "Слишком широкая аудитория"], answer: 1, explain: "Компания может активно улучшать продукт, но не замечать, что клиент уже решает задачу иначе." },
+        { q: "Могут ли производственная и маркетинговая ориентации сосуществовать?", options: ["Нет, они всегда противоречат", "Да, если эффективность не становится единственным критерием", "Только в малом бизнесе", "Только при отсутствии конкуренции"], answer: 1, explain: "Рыночная ориентация не отменяет эффективность — она связывает её с ценностью для клиента." },
+        { q: "Какой вопрос ближе всего к маркетинговой ориентации?", options: ["Как продать больше любой ценой?", "Как сделать ещё больше функций?", "Для кого и какую задачу мы решаем лучше альтернатив?", "Как сократить обсуждение с клиентом?"], answer: 2, explain: "Маркетинговая ориентация начинается с выбранной аудитории, задачи и ценности." },
+        { q: "Красивое сообщение без изменения слабого процесса — это риск какой логики?", options: ["Сбытовой", "Маркетинговой", "Холистической", "Исследовательской"], answer: 0, explain: "Убеждение подменяет работу с причиной и фактической ценностью." },
+      ],
+    },
+    {
+      type: "reflection", label: "Закрепление", title: "Определите доминирующую логику",
+      prompt: "Вспомните одно решение вашей команды за последний месяц. Какая ориентация проявилась в нём сильнее всего и что вы бы изменили?",
+    },
+    {
+      type: "summary", label: "Финиш", title: "Главная мысль урока",
+      bullets: [
+        "Ориентации — это логики решений, а не строгие исторические этапы.",
+        "Эффективность, качество и продажи полезны, пока не вытесняют понимание клиента.",
+        "Маркетинговая близорукость возникает при фокусе на продукте вместо задачи клиента.",
+        "Маркетинговая ориентация связывает аудиторию, ценность и цели бизнеса.",
+      ],
+    },
+  ],
+};
+
 function Shell({ children }) {
   return <div style={{ maxWidth: 760, margin: "0 auto" }}>{children}</div>;
 }
@@ -168,6 +274,71 @@ function Button({ children, onClick, disabled, secondary = false }) {
     background: secondary ? C.surface : C.ink, color: secondary ? C.ink : C.surface,
     fontSize: 14, fontWeight: 700, cursor: disabled ? "default" : "pointer", opacity: disabled ? .45 : 1,
   }}>{children}</button>;
+}
+
+function buildLessonFromCatalog(lessonId) {
+  const content = LESSON_CONTENT[lessonId];
+  const meta = MODULE1_LESSON_META.find((item) => item.id === lessonId);
+  if (!content || !meta) return LESSON;
+
+  const steps = [
+    {
+      type: "challenge",
+      label: "Стартовый кейс",
+      title: meta.question,
+      text: content.problemInput,
+      question: "Что нужно сделать в первую очередь?",
+      options: [
+        { text: "Сразу выбрать канал или инструмент", feedback: "Инструмент выбирают после постановки задачи, анализа аудитории и определения ценности." },
+        { text: "Сначала уточнить задачу, аудиторию, контекст и критерий результата", correct: true, feedback: "Верно. Это снижает риск преждевременного решения и связывает действие с реальной задачей." },
+        { text: "Скопировать решение конкурента", feedback: "Чужое решение может быть не связано с вашим контекстом, аудиторией и ограничениями." },
+        { text: "Увеличить объём коммуникации", feedback: "Больше коммуникации не исправляет неясную задачу или слабое предложение." },
+      ],
+    },
+    ...content.theory.map((item, index) => ({
+      type: "theory", label: `Теория ${index + 1}`, title: item.label, paragraphs: [item.text],
+      callout: index === content.theory.length - 1 ? content.limitations : undefined,
+    })),
+  ];
+
+  if (content.terms?.length) steps.push({ type: "terms", label: "Словарь", title: "Ключевые понятия урока", items: content.terms });
+  if (content.comparison) steps.push({ type: "comparison", label: "Сравнение", ...content.comparison });
+
+  const examples = content.examples ? Object.values(content.examples).filter(Boolean) : [];
+  if (examples.length) {
+    steps.push({
+      type: "examples", label: "Разбор примеров", title: "Как это выглядит на практике", items: examples,
+    });
+  }
+
+  if (content.practice) {
+    steps.push({
+      type: "practice", label: "Практика", title: "Примените модель к своей задаче",
+      tasks: [content.practice.micro, content.practice.main, content.practice.advanced].filter(Boolean),
+      solution: content.microcheck?.a || "Сильный ответ должен быть конкретным, опираться на понятия урока и показывать логику решения, а не только выбранный инструмент.",
+    });
+  }
+
+  if (content.mistakes?.length) steps.push({ type: "mistakes", label: "Ошибки новичка", title: "Что чаще всего ломает логику", items: content.mistakes });
+  if (content.microcheck) steps.push({
+    type: "microcheck", label: "Мини-проверка", title: content.microcheck.q, answer: content.microcheck.a,
+  });
+
+  if (content.quiz?.length) {
+    steps.push({
+      type: "quiz", label: lessonId === 8 ? "Финальный экзамен" : "Проверка",
+      title: lessonId === 8 ? "Итоговая проверка модуля" : "Проверьте понимание урока",
+      questions: content.quiz.map((q) => ({
+        q: q.q, options: q.options.map((o) => o.t),
+        answer: Math.max(0, q.options.findIndex((o) => o.correct)), explain: q.explain,
+      })),
+    });
+  }
+
+  steps.push({ type: "reflection", label: "Рефлексия", title: "Свяжите урок со своей работой", prompt: content.reflection });
+  steps.push({ type: "summary", label: lessonId === 8 ? "Модуль завершён" : "Финиш", title: lessonId === 8 ? "Вы собрали маркетинг в единую систему" : "Главные выводы", bullets: content.summary });
+
+  return { id: lessonId, title: meta.title, eyebrow: `Модуль 1 · Урок ${lessonId}`, duration: meta.duration.replace("≈", "Около"), outcomes: content.results, steps };
 }
 
 function Card({ children, tone = "plain" }) {
@@ -244,6 +415,37 @@ function StepBody({ step, answers, setAnswers }) {
     <div style={{ display: "grid", gap: 10, marginTop: 16 }}>{step.prompts.map((q) => <div key={q} style={{ background: C.surface, borderRadius: 12, padding: 14, display: "flex", gap: 10 }}><CircleHelp size={18} color={C.teal} /><span style={{ fontSize: 13, lineHeight: 1.45 }}>{q}</span></div>)}</div>
   </Card>;
 
+  if (step.type === "terms") return <Card tone="indigo"><Label>{step.label}</Label><h2 style={h2}>{step.title}</h2>
+    <div style={{ display: "grid", gap: 10, marginTop: 16 }}>{step.items.map((item) => <div key={item.term} style={{ background: C.surface, borderRadius: 12, padding: 15 }}><div style={{ fontWeight: 800, color: C.indigo }}>{item.term}</div><p style={{ ...p, fontSize: 13, marginTop: 5 }}>{item.def}</p></div>)}</div>
+  </Card>;
+
+  if (step.type === "comparison") return <Card><Label>{step.label}</Label><h2 style={h2}>{step.title}</h2>
+    <div style={{ overflowX: "auto", marginTop: 16 }}><table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}><thead><tr>{step.header.map((h) => <th key={h} style={{ textAlign: "left", padding: 11, borderBottom: `2px solid ${C.border}`, color: C.ink }}>{h}</th>)}</tr></thead><tbody>{step.rows.map((row, i) => <tr key={i}>{row.map((cell, j) => <td key={j} style={{ padding: 11, borderBottom: `1px solid ${C.border}`, color: j === 0 ? C.ink : C.muted, fontWeight: j === 0 ? 750 : 400 }}>{cell}</td>)}</tr>)}</tbody></table></div>
+  </Card>;
+
+  if (step.type === "examples") return <Card tone="teal"><Label>{step.label}</Label><h2 style={h2}>{step.title}</h2>
+    <div style={{ display: "grid", gap: 12, marginTop: 16 }}>{step.items.map((item, i) => <div key={i} style={{ background: C.surface, borderRadius: 12, padding: 15, display: "grid", gridTemplateColumns: "28px 1fr", gap: 10 }}><div style={{ width: 28, height: 28, borderRadius: 99, background: C.tealSoft, color: C.teal, display: "grid", placeItems: "center", fontWeight: 900 }}>{i + 1}</div><p style={{ ...p, margin: 0, fontSize: 13 }}>{item}</p></div>)}</div>
+  </Card>;
+
+  if (step.type === "practice") {
+    const state = answers[key] || { task: 0, answer: "", revealed: false };
+    const task = step.tasks[state.task] || step.tasks[0];
+    return <Card tone="gold"><Label>{step.label}</Label><h2 style={h2}>{step.title}</h2>
+      <div style={{ display: "flex", gap: 7, margin: "12px 0" }}>{step.tasks.map((_, i) => <button key={i} onClick={() => setAnswers((a) => ({ ...a, [key]: { ...state, task: i, answer: "", revealed: false } }))} style={{ border: 0, borderRadius: 99, padding: "7px 11px", background: state.task === i ? C.ink : C.surface, color: state.task === i ? C.surface : C.ink, cursor: "pointer", fontWeight: 750 }}>Задание {i + 1}</button>)}</div>
+      <p style={{ ...p, color: C.ink, fontWeight: 650 }}>{task}</p>
+      <textarea value={state.answer} onChange={(e) => setAnswers((a) => ({ ...a, [key]: { ...state, answer: e.target.value } }))} placeholder="Запишите решение в 3–7 предложениях" style={{ width: "100%", minHeight: 135, marginTop: 10, borderRadius: 12, border: `1px solid ${C.border}`, padding: 14, boxSizing: "border-box", resize: "vertical", font: "inherit", lineHeight: 1.5 }} />
+      <button onClick={() => setAnswers((a) => ({ ...a, [key]: { ...state, revealed: !state.revealed } }))} style={{ marginTop: 10, border: `1px solid ${C.border}`, background: C.surface, borderRadius: 10, padding: "9px 12px", cursor: "pointer", fontWeight: 750 }}>{state.revealed ? "Скрыть ориентир" : "Показать ориентир для самопроверки"}</button>
+      {state.revealed && <div style={{ marginTop: 10, background: C.surface, borderRadius: 12, padding: 14 }}><div style={{ fontWeight: 800, color: C.gold }}>Ориентир</div><p style={{ ...p, marginTop: 5, fontSize: 13 }}>{step.solution}</p></div>}
+    </Card>;
+  }
+
+  if (step.type === "mistakes") return <Card tone="berry"><Label>{step.label}</Label><h2 style={h2}>{step.title}</h2><div style={{ display: "grid", gap: 10, marginTop: 15 }}>{step.items.map((item) => <div key={item} style={{ display: "flex", gap: 10, background: C.surface, borderRadius: 12, padding: 14 }}><X size={18} color={C.berry} /><span style={{ fontSize: 13, lineHeight: 1.5 }}>{item}</span></div>)}</div></Card>;
+
+  if (step.type === "microcheck") {
+    const shown = Boolean(answers[key]);
+    return <Card><Label>{step.label}</Label><h2 style={h2}>{step.title}</h2><button onClick={() => setAnswers((a) => ({ ...a, [key]: !shown }))} style={{ marginTop: 8, border: 0, borderRadius: 10, padding: "10px 14px", background: C.ink, color: C.surface, cursor: "pointer", fontWeight: 800 }}>{shown ? "Скрыть ответ" : "Проверить себя"}</button>{shown && <p style={{ ...p, marginTop: 14 }}>{step.answer}</p>}</Card>;
+  }
+
   if (step.type === "quiz") {
     const state = answers[key] || {};
     return <Card><Label>{step.label}</Label><h2 style={h2}>{step.title}</h2><div style={{ display: "grid", gap: 18, marginTop: 18 }}>
@@ -271,43 +473,44 @@ function StepBody({ step, answers, setAnswers }) {
 const h2 = { fontFamily: "Fraunces, serif", fontSize: 27, lineHeight: 1.18, color: C.ink, margin: "0 0 12px", fontWeight: 650 };
 const p = { color: C.muted, fontSize: 15, lineHeight: 1.68, margin: "0 0 12px" };
 
-export default function StepLesson({ onBack, onComplete, nextLabel, onPracticeSave }) {
+export default function StepLesson({ lessonId = 1, onBack, onComplete, nextLabel, onPracticeSave }) {
+  const activeLesson = useMemo(() => lessonId === 1 ? LESSON : lessonId === 2 ? LESSON_2 : buildLessonFromCatalog(lessonId), [lessonId]);
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState({});
-  const step = LESSON.steps[index];
+  const step = activeLesson.steps[index];
   const stepKey = `step_${index}`;
-  const progress = Math.round(((index + 1) / LESSON.steps.length) * 100);
+  const progress = Math.round(((index + 1) / activeLesson.steps.length) * 100);
   const enriched = useMemo(() => ({ ...answers, stepKey }), [answers, stepKey]);
 
   function finish() {
-    const quizStep = LESSON.steps.find((s) => s.type === "quiz");
-    const quizIndex = LESSON.steps.findIndex((s) => s.type === "quiz");
+    const quizStep = activeLesson.steps.find((s) => s.type === "quiz");
+    const quizIndex = activeLesson.steps.findIndex((s) => s.type === "quiz");
     const quizAnswers = answers[`step_${quizIndex}`] || {};
     const score = quizStep.questions.reduce((sum, q, i) => sum + (quizAnswers[i] === q.answer ? 1 : 0), 0);
-    const reflectionIndex = LESSON.steps.findIndex((s) => s.type === "reflection");
+    const reflectionIndex = activeLesson.steps.findIndex((s) => s.type === "reflection");
     const reflection = answers[`step_${reflectionIndex}`] || "";
-    onPracticeSave?.("l1", "reflection", { answer: reflection, feedback: "" });
-    onComplete(1, score, quizStep.questions.length, reflection);
+    onPracticeSave?.(`l${activeLesson.id}`, "reflection", { answer: reflection, feedback: "" });
+    onComplete(activeLesson.id, score, quizStep.questions.length, reflection);
   }
 
   return <Shell>
     <button onClick={onBack} style={{ border: "none", background: "transparent", color: C.muted, display: "flex", alignItems: "center", gap: 7, cursor: "pointer", padding: 0, marginBottom: 22, fontWeight: 700 }}><ArrowLeft size={16} /> К обзору модуля</button>
     <div style={{ marginBottom: 22 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "end", marginBottom: 10 }}>
-        <div><div style={{ fontSize: 12, fontWeight: 800, color: C.gold, textTransform: "uppercase", letterSpacing: .8 }}>{LESSON.eyebrow}</div>
-          <h1 style={{ fontFamily: "Fraunces, serif", fontSize: 34, lineHeight: 1.08, margin: "5px 0 6px", color: C.ink }}>{LESSON.title}</h1>
-          <div style={{ fontSize: 13, color: C.faint }}>{LESSON.duration}</div></div>
+        <div><div style={{ fontSize: 12, fontWeight: 800, color: C.gold, textTransform: "uppercase", letterSpacing: .8 }}>{activeLesson.eyebrow}</div>
+          <h1 style={{ fontFamily: "Fraunces, serif", fontSize: 34, lineHeight: 1.08, margin: "5px 0 6px", color: C.ink }}>{activeLesson.title}</h1>
+          <div style={{ fontSize: 13, color: C.faint }}>{activeLesson.duration}</div></div>
         <div style={{ fontSize: 13, fontWeight: 800, color: C.ink }}>{progress}%</div>
       </div>
       <div style={{ height: 8, borderRadius: 99, background: C.border, overflow: "hidden" }}><div style={{ width: `${progress}%`, height: "100%", background: C.gold, transition: "width .25s ease" }} /></div>
     </div>
 
-    {index === 0 && <Card><Label>После урока вы сможете</Label><ul style={{ margin: "10px 0 0", paddingLeft: 20, lineHeight: 1.75, color: C.ink }}>{LESSON.outcomes.map((x) => <li key={x}>{x}</li>)}</ul></Card>}
+    {index === 0 && <Card><Label>После урока вы сможете</Label><ul style={{ margin: "10px 0 0", paddingLeft: 20, lineHeight: 1.75, color: C.ink }}>{activeLesson.outcomes.map((x) => <li key={x}>{x}</li>)}</ul></Card>}
     <div style={{ marginTop: 16 }}><StepBody step={step} answers={enriched} setAnswers={setAnswers} /></div>
 
     <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginTop: 18 }}>
       <Button secondary disabled={index === 0} onClick={() => setIndex((i) => Math.max(0, i - 1))}><ArrowLeft size={16} /> Назад</Button>
-      {index < LESSON.steps.length - 1 ? <Button onClick={() => setIndex((i) => i + 1)}>Продолжить <ArrowRight size={16} /></Button>
+      {index < activeLesson.steps.length - 1 ? <Button onClick={() => setIndex((i) => i + 1)}>Продолжить <ArrowRight size={16} /></Button>
         : <div style={{ display: "flex", gap: 8 }}><Button secondary onClick={() => { setIndex(0); setAnswers({}); }}><RotateCcw size={16} /> Пройти заново</Button><Button onClick={finish}>{nextLabel} <ArrowRight size={16} /></Button></div>}
     </div>
   </Shell>;
