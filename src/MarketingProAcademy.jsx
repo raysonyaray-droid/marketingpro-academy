@@ -9,7 +9,7 @@ import {
   Flame, Star, Trophy, CheckCircle2, Lock, ArrowRight, ArrowLeft,
   BookOpen, Sparkles, Target, ChevronRight,
   X, Check, Copy, Search, Loader2,
-  Save, Send, Info,
+  Save, Send, Info, Home, Map, Briefcase, User, Library,
 } from "lucide-react";
 
 /* ============================================================
@@ -1886,6 +1886,37 @@ const DEFAULT_STATE = {
   practiceStore: {}, portfolio: {}, notes: "", history: [],
 };
 
+
+function MobileBottomNav({ screen, onNavigate }) {
+  const items = [
+    { key: "dashboard", label: "Главная", icon: Home },
+    { key: "map", label: "Карта", icon: Map },
+    { key: "portfolio", label: "Работы", icon: Briefcase },
+    { key: "cabinet", label: "Кабинет", icon: User },
+    { key: "library", label: "Библиотека", icon: Library },
+  ];
+
+  return (
+    <nav className="mobile-bottom-nav" aria-label="Основная навигация">
+      {items.map(({ key, label, icon: Icon }) => {
+        const active = screen === key || (key === "map" && ["moduleOverview", "lesson"].includes(screen));
+        return (
+          <button
+            key={key}
+            type="button"
+            className={`mobile-bottom-nav__item${active ? " active" : ""}`}
+            onClick={() => onNavigate(key)}
+            aria-current={active ? "page" : undefined}
+          >
+            <Icon size={19} strokeWidth={active ? 2.4 : 1.8} />
+            <span>{label}</span>
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
 export default function App() {
   const [loaded, setLoaded] = useState(false);
   const [state, setState] = useState(DEFAULT_STATE);
@@ -1993,11 +2024,57 @@ export default function App() {
         .lesson-page-v6 { width: 100%; max-width: 960px !important; min-width: 0; }
         .lesson-page-v6 > * { min-width: 0; max-width: 100%; }
         .lesson-page-v6 table { max-width: 100%; }
+        .mobile-bottom-nav { display: none; }
 
         @media (max-width: 760px) {
           .academy-shell { display: block !important; width: 100% !important; }
-          .academy-shell > aside,
-          .academy-shell > nav { display: none !important; }
+          .academy-shell > aside { display: none !important; }
+          .mobile-bottom-nav {
+            position: fixed;
+            left: 10px;
+            right: 10px;
+            bottom: max(10px, env(safe-area-inset-bottom));
+            z-index: 1000;
+            display: grid !important;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 4px;
+            padding: 7px;
+            border: 1px solid ${T.border};
+            border-radius: 20px;
+            background: color-mix(in srgb, ${T.surface} 94%, transparent);
+            box-shadow: 0 16px 40px rgba(24, 28, 54, .18);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+          }
+          .mobile-bottom-nav__item {
+            min-width: 0;
+            min-height: 54px;
+            padding: 7px 2px 6px;
+            border: 0;
+            border-radius: 14px;
+            background: transparent;
+            color: ${T.inkFaint};
+            font-family: ${bodyFont};
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+          }
+          .mobile-bottom-nav__item span {
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 9px;
+            font-weight: 700;
+            line-height: 1;
+          }
+          .mobile-bottom-nav__item.active {
+            background: ${T.ink};
+            color: ${T.surface};
+          }
           .academy-main {
             width: 100% !important;
             max-width: none !important;
@@ -2093,6 +2170,7 @@ export default function App() {
         {screen === "portfolio" && <Portfolio state={state} onSaveWork={handlePortfolioSave} userContext={userContext} />}
         {screen === "library" && <LibraryScreen notes={state.notes} />}
       </main>
+      <MobileBottomNav screen={screen} onNavigate={setScreen} />
     </div>
   );
 }
